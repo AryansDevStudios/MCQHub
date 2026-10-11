@@ -22,10 +22,21 @@ import {
   Calendar,
   CheckCircle2,
   XCircle,
+  RefreshCw,
 } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 export function HistoryView() {
-  const { history, clearHistory, viewAttemptResult, setView, user } = useQuiz();
+  const {
+    history,
+    clearHistory,
+    viewAttemptResult,
+    setView,
+    user,
+    isSyncing,
+    syncLibraryWithCloud,
+    lastSyncTime,
+  } = useQuiz();
   const [showClearDialog, setShowClearDialog] = useState(false);
 
   return (
@@ -38,29 +49,55 @@ export function HistoryView() {
             <Badge variant="outline" className="font-mono text-[11px] py-0 px-1.5 text-primary border-primary/30">
               Exam Auditing
             </Badge>
-            <span className="text-xs text-muted-foreground font-mono">/ users/{user?.username || 'me'}/history</span>
+            <span className="text-xs text-muted-foreground font-mono">/ users/{user?.username || 'guest'}/history</span>
           </div>
           <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">
             Examination Log & Attempts
           </h1>
           <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
-            {user
-              ? `Chronological records synced with Cloud Firestore for @${user.username}`
-              : 'Chronological test history recorded locally'}
+            {user ? (
+              <span>
+                Chronological records synced with Cloud Firestore for <strong className="text-foreground">@{user.username}</strong>
+                {lastSyncTime && (
+                  <span className="text-[11px] opacity-75 font-mono ml-2">
+                    (Aligned: {new Date(lastSyncTime).toLocaleTimeString()})
+                  </span>
+                )}
+              </span>
+            ) : (
+              'Chronological test history recorded locally'
+            )}
           </p>
         </div>
 
-        {history.length > 0 && (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setShowClearDialog(true)}
-            className="h-8 text-xs font-mono text-rose-400 hover:text-rose-300 hover:bg-rose-950/20 gap-1.5 self-start sm:self-auto"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-            Clear Attempt History
-          </Button>
-        )}
+        {/* Action Buttons */}
+        <div className="flex items-center gap-2 self-start sm:self-auto">
+          {user && (
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={isSyncing}
+              onClick={() => syncLibraryWithCloud(false)}
+              className="h-8 text-xs font-mono gap-1.5 border-border/70 shrink-0"
+              title="Align history logs with Cloud Firestore"
+            >
+              <RefreshCw className={cn('w-3.5 h-3.5 text-primary', isSyncing && 'animate-spin')} />
+              <span>{isSyncing ? 'Syncing...' : 'Sync Cloud'}</span>
+            </Button>
+          )}
+
+          {history.length > 0 && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowClearDialog(true)}
+              className="h-8 text-xs font-mono text-rose-400 hover:text-rose-300 hover:bg-rose-950/20 gap-1.5"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Clear History</span>
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Attempts List */}
@@ -100,39 +137,42 @@ export function HistoryView() {
                     </Badge>
                   </div>
 
-                  <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground font-mono">
+                  <div className="flex items-center gap-4 text-xs text-muted-foreground font-mono">
                     <span className="flex items-center gap-1">
                       <Calendar className="w-3 h-3" />
                       {new Date(attempt.date).toLocaleString()}
                     </span>
-                    <span>•</span>
                     <span className="flex items-center gap-1">
                       <Clock className="w-3 h-3" />
                       {attempt.timeSpent}
                     </span>
-                    <span>•</span>
-                    <span>
-                      {attempt.score} of {attempt.total} correct
-                    </span>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-3 self-end sm:self-center">
-                  <div className="text-right font-mono">
-                    <Badge
-                      className={
-                        isHigh
-                          ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30 text-xs font-bold'
-                          : isMedium
-                          ? 'bg-amber-500/15 text-amber-400 border-amber-500/30 text-xs font-bold'
-                          : 'bg-rose-500/15 text-rose-400 border-rose-500/30 text-xs font-bold'
-                      }
+                <div className="flex items-center gap-4">
+                  <div className="text-right">
+                    <div className="flex items-center gap-1.5 justify-end">
+                      {isHigh ? (
+                        <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                      ) : isMedium ? (
+                        <CheckCircle2 className="w-4 h-4 text-amber-400" />
+                      ) : (
+                        <XCircle className="w-4 h-4 text-rose-400" />
+                      )}
+                      <span className="font-mono font-bold text-sm text-foreground">
+                        {attempt.score}/{attempt.total}
+                      </span>
+                    </div>
+                    <div
+                      className={`text-[11px] font-mono font-medium ${
+                        isHigh ? 'text-emerald-400' : isMedium ? 'text-amber-400' : 'text-rose-400'
+                      }`}
                     >
-                      {pct}%
-                    </Badge>
+                      {pct}% Accuracy
+                    </div>
                   </div>
 
-                  <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors" />
+                  <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-primary group-hover:translate-x-0.5 transition-all" />
                 </div>
               </div>
             );
@@ -140,15 +180,15 @@ export function HistoryView() {
         </div>
       )}
 
-      {/* Clear Confirmation Dialog */}
+      {/* Clear Confirmation Modal */}
       <AlertDialog open={showClearDialog} onOpenChange={setShowClearDialog}>
         <AlertDialogContent className="bg-card border-border text-foreground">
           <AlertDialogHeader>
             <AlertDialogTitle className="text-base font-semibold">
-              Purge All Exam Attempts?
+              Clear All Examination History?
             </AlertDialogTitle>
             <AlertDialogDescription className="text-xs text-muted-foreground">
-              This will erase all past exam attempts and diagnostic logs. This action cannot be reversed.
+              This will permanently delete all {history.length} logged exam attempts from local storage and Cloud Firestore. This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -160,7 +200,7 @@ export function HistoryView() {
               }}
               className="bg-rose-600 hover:bg-rose-700 text-white text-xs font-mono"
             >
-              Purge History
+              Clear All Records
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

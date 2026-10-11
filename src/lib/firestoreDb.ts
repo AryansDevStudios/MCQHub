@@ -296,3 +296,48 @@ export async function saveUserHistoryFirestore(username: string, history: QuizAt
     return false;
   }
 }
+
+/**
+ * Fetch complete user profile, quizzes, and history from Cloud Firestore via Edge Worker
+ */
+export async function fetchUserDataFirestore(username: string): Promise<{
+  success: boolean;
+  quizzes?: Quiz[];
+  history?: QuizAttempt[];
+  sessions?: UserSession[];
+  profile?: UserProfile;
+  error?: string;
+}> {
+  const cleanUser = sanitizeUsername(username);
+  try {
+    const res = await fetch(`${CF_WORKER_URL}/api/user/data?username=${encodeURIComponent(cleanUser)}`);
+    if (res.ok) {
+      const data = await res.json();
+      if (data.success) {
+        return {
+          success: true,
+          quizzes: Array.isArray(data.quizzes) ? data.quizzes : [],
+          history: Array.isArray(data.history) ? data.history : [],
+          sessions: Array.isArray(data.sessions) ? data.sessions : [],
+          profile: data.profile,
+        };
+      }
+    }
+  } catch (err: any) {
+    console.warn('Failed to fetch user data from edge worker:', err?.message);
+  }
+
+  // Local fallback
+  const backup = getLocalUserBackup(cleanUser);
+  if (backup) {
+    return {
+      success: true,
+      quizzes: backup.quizzes || [],
+      history: backup.history || [],
+      sessions: backup.sessions || [],
+      profile: backup,
+    };
+  }
+
+  return { success: false, error: 'Could not fetch user data' };
+}

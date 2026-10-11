@@ -24,7 +24,10 @@ import {
   Database,
   Calendar,
   Layers,
+  RefreshCw,
+  CloudCheck,
 } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import type { Quiz } from '@/lib/types';
 
 export function LibraryView() {
@@ -35,6 +38,9 @@ export function LibraryView() {
     setEditorJsonBuffer,
     setView,
     user,
+    isSyncing,
+    syncLibraryWithCloud,
+    lastSyncTime,
   } = useQuiz();
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -59,28 +65,54 @@ export function LibraryView() {
             <Badge variant="outline" className="font-mono text-[11px] py-0 px-1.5 text-primary border-primary/30">
               Firestore Repository
             </Badge>
-            <span className="text-xs text-muted-foreground font-mono">/ users/{user?.username || 'me'}/quizzes</span>
+            <span className="text-xs text-muted-foreground font-mono">/ users/{user?.username || 'guest'}/quizzes</span>
           </div>
           <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">
             Saved Assessments Library
           </h1>
           <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
-            {user
-              ? `Synced with Google Cloud Firestore for @${user.username}`
-              : 'Stored in local browser storage (Sign in to sync with Cloud Firestore)'}
+            {user ? (
+              <span>
+                Synced with Cloud Firestore for <strong className="text-foreground">@{user.username}</strong>
+                {lastSyncTime && (
+                  <span className="text-[11px] opacity-75 font-mono ml-2">
+                    (Aligned: {new Date(lastSyncTime).toLocaleTimeString()})
+                  </span>
+                )}
+              </span>
+            ) : (
+              'Stored in local browser storage (Sign in to sync with Cloud Firestore across devices)'
+            )}
           </p>
         </div>
 
-        {/* Search */}
-        <div className="relative w-full sm:w-64">
-          <Search className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-muted-foreground" />
-          <Input
-            type="text"
-            placeholder="Search saved quizzes..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="h-8 pl-8 text-xs bg-background font-mono"
-          />
+        {/* Right Action Bar */}
+        <div className="flex items-center gap-2 w-full sm:w-auto">
+          {user && (
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={isSyncing}
+              onClick={() => syncLibraryWithCloud(false)}
+              className="h-8 text-xs font-mono gap-1.5 border-border/70 shrink-0"
+              title="Align and reconcile library with Cloud Firestore"
+            >
+              <RefreshCw className={cn('w-3.5 h-3.5 text-primary', isSyncing && 'animate-spin')} />
+              <span>{isSyncing ? 'Syncing...' : 'Sync Cloud'}</span>
+            </Button>
+          )}
+
+          {/* Search */}
+          <div className="relative flex-1 sm:w-64">
+            <Search className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-muted-foreground" />
+            <Input
+              type="text"
+              placeholder="Search saved quizzes..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="h-8 pl-8 text-xs bg-background font-mono"
+            />
+          </div>
         </div>
       </div>
 
@@ -189,7 +221,7 @@ export function LibraryView() {
             <AlertDialogAction
               onClick={() => {
                 if (quizToDelete) {
-                  deleteQuizFromLibrary(quizToDelete.title);
+                  deleteQuizFromLibrary(quizToDelete.id || quizToDelete.title);
                   setQuizToDelete(null);
                 }
               }}

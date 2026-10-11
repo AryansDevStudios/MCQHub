@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
+import React, { createContext, useContext, useEffect, useState, useRef, useCallback } from 'react';
 import type {
   Quiz,
   Question,
@@ -17,6 +17,7 @@ import {
   loginUserFirestore,
   saveUserQuizzesFirestore,
   saveUserHistoryFirestore,
+  fetchUserDataFirestore,
 } from '@/lib/firestoreDb';
 
 interface QuizContextType {
@@ -34,6 +35,11 @@ interface QuizContextType {
   register: (username: string, pass: string, displayName?: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => void;
   syncToStorage: () => Promise<void>;
+
+  // Two-way Smart Cloud Sync
+  isSyncing: boolean;
+  lastSyncTime: string | null;
+  syncLibraryWithCloud: (silent?: boolean, usernameOverride?: string) => Promise<void>;
 
   // Firebase Firestore Heuristic
   heuristicStatus: HeuristicStatus | null;
@@ -89,10 +95,12 @@ const STORAGE_KEYS = {
   SESSION: 'mcqhub_active_session',
   LOCAL_QUIZZES: 'mcqhub_local_quizzes',
   LOCAL_HISTORY: 'mcqhub_local_history',
+  DELETED_QUIZZES: 'mcqhub_deleted_quizzes',
+  LAST_SYNC: 'mcqhub_last_sync',
 };
 
 export function QuizProvider({ children }: { children: React.ReactNode }) {
-  const [view, setView] = useState<ViewState>('home');
+  const [view, setViewState] = useState<ViewState>('home');
   const [theme, setTheme] = useState<'light' | 'dark'>('dark');
 
   // Auth & Firestore state
@@ -101,6 +109,10 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
   const [isAuthLoading, setIsAuthLoading] = useState<boolean>(false);
   const [heuristicStatus, setHeuristicStatus] = useState<HeuristicStatus | null>(null);
   const [isCheckingHeuristic, setIsCheckingHeuristic] = useState<boolean>(false);
+
+  // Synchronization status
+  const [isSyncing, setIsSyncing] = useState<boolean>(false);
+  const [lastSyncTime, setLastSyncTime] = useState<string | null>(null);
 
   // Collections
   const [savedQuizzes, setSavedQuizzes] = useState<Quiz[]>([]);
@@ -125,7 +137,168 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
   // Timer interval ref
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // 1. Initialize Theme & Local Session on mount
+  // Toast utilities
+  const addToast = useCallback((message: string, type: 'success' | 'error' | 'info' = 'info') => {
+    const id = Math.random().toString(36).substring(2, 9);
+    setToasts((prev) => [...prev, { id, message, type }]);
+    setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== id));
+    }, 4000);
+  }, []);
+
+  const removeToast = (id: string) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+  };
+
+  /**
+   * Smart Two-Way Reconciliation with Cloud Firestore
+   * - Aligns local storage & Firestore on app refresh / network reconnect / library tab click.
+   * - Preserves locally generated offline tests and pushes them to Firestore.
+   * - Pulls new tests added from other devices (mobile, laptop).
+   * - Does NOT poll constantly in the background.
+   */
+  const syncLibraryWithCloud = useCallback(
+    async (silent: boolean = false, usernameOverride?: string) => {
+      const activeUsername = usernameOverride || user?.username;
+      if (!activeUsername) return;
+
+      setIsSyncing(true);
+
+      try {
+        const cloudRes = await fetchUserDataFirestore(activeUsername);
+        if (!cloudRes.success) {
+          if (!silent) addToast('Could not reach Firestore gateway; using local library cache', 'info');
+          return;
+        }
+
+        const cloudQuizzes: Quiz[] = cloudRes.quizzes || [];
+        const cloudHistory: QuizAttempt[] = cloudRes.history || [];
+
+        // 1. Read locally recorded deletions
+        let deletedQuizIds: Set<string> = new Set();
+        try {
+          const rawDeleted = localStorage.getItem(STORAGE_KEYS.DELETED_QUIZZES);
+          if (rawDeleted) {
+            deletedQuizIds = new Set(JSON.parse(rawDeleted));
+          }
+        } catch {}
+
+        // Read current local quizzes from storage for most accurate snapshot
+        let currentLocalQuizzes: Quiz[] = [];
+        try {
+          const rawLocal = localStorage.getItem(STORAGE_KEYS.LOCAL_QUIZZES);
+          if (rawLocal) currentLocalQuizzes = JSON.parse(rawLocal);
+        } catch {
+          currentLocalQuizzes = savedQuizzes;
+        }
+
+        // 2. Reconcile Quizzes
+        const mergedQuizzesMap = new Map<string, Quiz>();
+
+        // Add valid cloud quizzes
+        for (const q of cloudQuizzes) {
+          const key = q.id || q.title;
+          if (!deletedQuizIds.has(key) && !deletedQuizIds.has(q.title)) {
+            mergedQuizzesMap.set(key, q);
+          }
+        }
+
+        // Merge local quizzes (pulling in any generated offline or pending upload)
+        let needsCloudQuizUpdate = false;
+        for (const q of currentLocalQuizzes) {
+          const key = q.id || q.title;
+          if (deletedQuizIds.has(key) || deletedQuizIds.has(q.title)) {
+            continue;
+          }
+          if (!mergedQuizzesMap.has(key)) {
+            // Local has a quiz that Firestore is missing!
+            mergedQuizzesMap.set(key, q);
+            needsCloudQuizUpdate = true;
+          } else {
+            // If both have it, keep the one with questions or newest timestamp
+            const existing = mergedQuizzesMap.get(key)!;
+            if (
+              (!existing.questions || existing.questions.length === 0) &&
+              (q.questions && q.questions.length > 0)
+            ) {
+              mergedQuizzesMap.set(key, q);
+              needsCloudQuizUpdate = true;
+            }
+          }
+        }
+
+        // If items were deleted, Cloud needs to be updated
+        if (deletedQuizIds.size > 0) {
+          needsCloudQuizUpdate = true;
+        }
+
+        const reconciledQuizzes = Array.from(mergedQuizzesMap.values());
+
+        // 3. Reconcile History
+        let currentLocalHistory: QuizAttempt[] = [];
+        try {
+          const rawHist = localStorage.getItem(STORAGE_KEYS.LOCAL_HISTORY);
+          if (rawHist) currentLocalHistory = JSON.parse(rawHist);
+        } catch {
+          currentLocalHistory = history;
+        }
+
+        const mergedHistoryMap = new Map<string, QuizAttempt>();
+        for (const h of cloudHistory) {
+          mergedHistoryMap.set(h.id, h);
+        }
+        let needsCloudHistoryUpdate = false;
+        for (const h of currentLocalHistory) {
+          if (!mergedHistoryMap.has(h.id)) {
+            mergedHistoryMap.set(h.id, h);
+            needsCloudHistoryUpdate = true;
+          }
+        }
+        const reconciledHistory = Array.from(mergedHistoryMap.values());
+
+        // 4. Update local state and localStorage
+        setSavedQuizzes(reconciledQuizzes);
+        localStorage.setItem(STORAGE_KEYS.LOCAL_QUIZZES, JSON.stringify(reconciledQuizzes));
+
+        setHistory(reconciledHistory);
+        localStorage.setItem(STORAGE_KEYS.LOCAL_HISTORY, JSON.stringify(reconciledHistory));
+
+        // 5. If local had new items or deletions, align Firestore in one update
+        if (needsCloudQuizUpdate) {
+          await saveUserQuizzesFirestore(activeUsername, reconciledQuizzes);
+          localStorage.removeItem(STORAGE_KEYS.DELETED_QUIZZES);
+        }
+        if (needsCloudHistoryUpdate) {
+          await saveUserHistoryFirestore(activeUsername, reconciledHistory);
+        }
+
+        const syncTimestamp = new Date().toISOString();
+        setLastSyncTime(syncTimestamp);
+        localStorage.setItem(STORAGE_KEYS.LAST_SYNC, syncTimestamp);
+
+        if (!silent) {
+          addToast(`Library aligned with Cloud Firestore (${reconciledQuizzes.length} tests)`, 'success');
+        }
+      } catch (err: any) {
+        console.warn('Sync with cloud failed:', err?.message);
+        if (!silent) addToast('Sync failed: ' + (err?.message || 'Network error'), 'error');
+      } finally {
+        setIsSyncing(false);
+      }
+    },
+    [user, savedQuizzes, history, addToast]
+  );
+
+  // Navigation with smart sync on opening library or history
+  const setView = (newView: ViewState) => {
+    setViewState(newView);
+    if ((newView === 'library' || newView === 'history') && user) {
+      // Fetch and align once upon opening the tab
+      syncLibraryWithCloud(true);
+    }
+  };
+
+  // 1. Initialize Theme, Local Storage, and Initial Alignment on Mount
   useEffect(() => {
     // Theme
     const savedTheme = localStorage.getItem(STORAGE_KEYS.THEME) as 'light' | 'dark' | null;
@@ -136,7 +309,8 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
       document.documentElement.classList.add('dark');
     }
 
-    // Local / Guest Fallback Data
+    // Local Storage Immediate Hydration
+    let cachedUser: UserProfile | null = null;
     try {
       const cachedQuizzes = localStorage.getItem(STORAGE_KEYS.LOCAL_QUIZZES);
       if (cachedQuizzes) setSavedQuizzes(JSON.parse(cachedQuizzes));
@@ -144,18 +318,42 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
       const cachedHistory = localStorage.getItem(STORAGE_KEYS.LOCAL_HISTORY);
       if (cachedHistory) setHistory(JSON.parse(cachedHistory));
 
-      const cachedUser = localStorage.getItem(STORAGE_KEYS.USER);
-      if (cachedUser) setUser(JSON.parse(cachedUser));
+      const rawUser = localStorage.getItem(STORAGE_KEYS.USER);
+      if (rawUser) {
+        cachedUser = JSON.parse(rawUser);
+        setUser(cachedUser);
+      }
 
       const cachedSession = localStorage.getItem(STORAGE_KEYS.SESSION);
       if (cachedSession) setActiveSession(JSON.parse(cachedSession));
+
+      const cachedLastSync = localStorage.getItem(STORAGE_KEYS.LAST_SYNC);
+      if (cachedLastSync) setLastSyncTime(cachedLastSync);
     } catch (e) {
       console.warn('Error reading localStorage initial state:', e);
     }
 
-    // Automatic Heuristic Check on start
+    // Single Heuristic Check on start
     runInitialHeuristic();
+
+    // Single Alignment Sync with Firestore on start (once per app refresh)
+    if (cachedUser) {
+      syncLibraryWithCloud(true, cachedUser.username);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // 2. Listen for Network Reconnect: Sync immediately when internet is restored
+  useEffect(() => {
+    const handleOnline = () => {
+      if (user) {
+        addToast('Internet connection restored. Aligning library with Firestore...', 'info');
+        syncLibraryWithCloud(false);
+      }
+    };
+    window.addEventListener('online', handleOnline);
+    return () => window.removeEventListener('online', handleOnline);
+  }, [user, syncLibraryWithCloud, addToast]);
 
   const runInitialHeuristic = async () => {
     setIsCheckingHeuristic(true);
@@ -185,7 +383,7 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
         ok: false,
         latencyMs: 0,
         timestamp: new Date().toISOString(),
-        bucket: 'Cloud Firestore (default)',
+        bucket: 'Cloud Firestore (mcqhub-724e3)',
         error: err?.message || 'Firestore connection error',
       };
       setHeuristicStatus(fallback);
@@ -195,7 +393,7 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  // 2. Timer engine
+  // Timer engine
   useEffect(() => {
     if (isTimerRunning) {
       timerRef.current = setInterval(() => {
@@ -209,19 +407,6 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
       if (timerRef.current) clearInterval(timerRef.current);
     };
   }, [isTimerRunning]);
-
-  // Toast utilities
-  const addToast = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
-    const id = Math.random().toString(36).substring(2, 9);
-    setToasts((prev) => [...prev, { id, message, type }]);
-    setTimeout(() => {
-      setToasts((prev) => prev.filter((t) => t.id !== id));
-    }, 4000);
-  };
-
-  const removeToast = (id: string) => {
-    setToasts((prev) => prev.filter((t) => t.id !== id));
-  };
 
   const toggleTheme = () => {
     const nextTheme = theme === 'dark' ? 'light' : 'dark';
@@ -245,14 +430,8 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
       localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(result.profile));
       localStorage.setItem(STORAGE_KEYS.SESSION, JSON.stringify(result.session));
 
-      if (result.quizzes && result.quizzes.length > 0) {
-        setSavedQuizzes(result.quizzes);
-        localStorage.setItem(STORAGE_KEYS.LOCAL_QUIZZES, JSON.stringify(result.quizzes));
-      }
-      if (result.history && result.history.length > 0) {
-        setHistory(result.history);
-        localStorage.setItem(STORAGE_KEYS.LOCAL_HISTORY, JSON.stringify(result.history));
-      }
+      // Trigger alignment sync immediately upon login
+      await syncLibraryWithCloud(true, result.profile.username);
 
       addToast(`Welcome back, ${result.profile.displayName}!`, 'success');
       return { success: true };
@@ -279,6 +458,11 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
       localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(result.profile));
       localStorage.setItem(STORAGE_KEYS.SESSION, JSON.stringify(result.session));
 
+      // If user had local quizzes generated prior to registering, sync them to the new account!
+      if (savedQuizzes.length > 0) {
+        await saveUserQuizzesFirestore(result.profile.username, savedQuizzes);
+      }
+
       addToast(`Account created for ${result.profile.displayName}`, 'success');
       return { success: true };
     } catch (err: any) {
@@ -299,17 +483,7 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
   };
 
   const syncToStorage = async () => {
-    if (!user) {
-      addToast('Cannot sync: Not logged in', 'info');
-      return;
-    }
-    try {
-      await saveUserQuizzesFirestore(user.username, savedQuizzes);
-      await saveUserHistoryFirestore(user.username, history);
-      addToast('Library & History synced to Cloud Firestore', 'success');
-    } catch (err: any) {
-      addToast('Sync failed: ' + (err?.message || 'Firestore error'), 'error');
-    }
+    await syncLibraryWithCloud(false);
   };
 
   // Exam Management
@@ -328,7 +502,7 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
     setIsInstantMode(instant);
     setElapsedSeconds(0);
     setIsTimerRunning(true);
-    setView('quiz');
+    setViewState('quiz');
   };
 
   const selectAnswer = (questionIndex: number, optionIndex: number) => {
@@ -444,12 +618,12 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
     setHistory(newHistory);
     localStorage.setItem(STORAGE_KEYS.LOCAL_HISTORY, JSON.stringify(newHistory));
 
-    // If user is logged in, sync attempt to Firestore
-    if (user) {
+    // If user is logged in, sync attempt to Firestore in background
+    if (user && typeof navigator !== 'undefined' && navigator.onLine) {
       saveUserHistoryFirestore(user.username, newHistory).catch(() => {});
     }
 
-    setView('results');
+    setViewState('results');
     addToast(`Exam completed! Score: ${score}/${activeQuiz.questions.length}`, 'success');
   };
 
@@ -461,36 +635,72 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
     setCurrentQuestionIndex(0);
     setElapsedSeconds(0);
     setIsTimerRunning(true);
-    setView('quiz');
+    setViewState('quiz');
   };
 
-  // Library & History management
+  // Immediate Local Persistence with Background Cloud Sync
   const saveQuizToLibrary = (quiz: Quiz) => {
     const toSave: Quiz = {
       ...JSON.parse(JSON.stringify(quiz)),
-      id: quiz.id || `quiz_${Date.now()}`,
+      id: quiz.id || `quiz_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
       createdAt: quiz.createdAt || new Date().toISOString(),
     };
 
-    const updated = [toSave, ...savedQuizzes.filter((q) => q.title !== quiz.title)];
+    // 1. Instantly update local state & localStorage (0ms latency for the user)
+    const updated = [
+      toSave,
+      ...savedQuizzes.filter((q) => (q.id && toSave.id ? q.id !== toSave.id : q.title !== toSave.title)),
+    ];
     setSavedQuizzes(updated);
     localStorage.setItem(STORAGE_KEYS.LOCAL_QUIZZES, JSON.stringify(updated));
 
-    if (user) {
-      saveUserQuizzesFirestore(user.username, updated).catch(() => {});
+    // Remove from deleted list if re-added
+    try {
+      const rawDeleted = localStorage.getItem(STORAGE_KEYS.DELETED_QUIZZES);
+      if (rawDeleted) {
+        const deletedSet: Set<string> = new Set(JSON.parse(rawDeleted));
+        if (toSave.id) deletedSet.delete(toSave.id);
+        deletedSet.delete(toSave.title);
+        localStorage.setItem(STORAGE_KEYS.DELETED_QUIZZES, JSON.stringify(Array.from(deletedSet)));
+      }
+    } catch {}
+
+    // 2. Asynchronously sync to Cloud Firestore if logged in
+    if (user && typeof navigator !== 'undefined' && navigator.onLine) {
+      saveUserQuizzesFirestore(user.username, updated).catch((err) => {
+        console.warn('Background save to Firestore failed (queued for next sync):', err?.message);
+      });
     }
 
     addToast(`"${quiz.title}" saved to library`, 'success');
   };
 
   const deleteQuizFromLibrary = (indexOrTitle: string | number) => {
-    const updated = savedQuizzes.filter((q, i) =>
-      typeof indexOrTitle === 'number' ? i !== indexOrTitle : q.title !== indexOrTitle
-    );
+    let deletedItem: Quiz | undefined;
+    const updated = savedQuizzes.filter((q, i) => {
+      const isMatch = typeof indexOrTitle === 'number'
+        ? i === indexOrTitle
+        : q.id === indexOrTitle || q.title === indexOrTitle;
+      if (isMatch) deletedItem = q;
+      return !isMatch;
+    });
+
     setSavedQuizzes(updated);
     localStorage.setItem(STORAGE_KEYS.LOCAL_QUIZZES, JSON.stringify(updated));
 
-    if (user) {
+    // Record deletion so multi-device sync does not restore it
+    if (deletedItem) {
+      try {
+        const rawDeleted = localStorage.getItem(STORAGE_KEYS.DELETED_QUIZZES);
+        const deletedSet: Set<string> = new Set(rawDeleted ? JSON.parse(rawDeleted) : []);
+        if (deletedItem.id) deletedSet.add(deletedItem.id);
+        deletedSet.add(deletedItem.title);
+        localStorage.setItem(STORAGE_KEYS.DELETED_QUIZZES, JSON.stringify(Array.from(deletedSet)));
+      } catch {}
+    }
+
+    // Push updated list to Firestore immediately if online
+    if (user && typeof navigator !== 'undefined' && navigator.onLine) {
       saveUserQuizzesFirestore(user.username, updated).catch(() => {});
     }
 
@@ -500,7 +710,7 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
   const clearHistory = () => {
     setHistory([]);
     localStorage.removeItem(STORAGE_KEYS.LOCAL_HISTORY);
-    if (user) {
+    if (user && typeof navigator !== 'undefined' && navigator.onLine) {
       saveUserHistoryFirestore(user.username, []).catch(() => {});
     }
     addToast('Attempt history cleared', 'info');
@@ -512,7 +722,7 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
     setQuestionNotes(attempt.questionNotes || {});
     setElapsedSeconds(0);
     setIsTimerRunning(false);
-    setView('results');
+    setViewState('results');
   };
 
   return (
@@ -522,7 +732,6 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
         setView,
         theme,
         toggleTheme,
-
         user,
         activeSession,
         isAuthLoading,
@@ -530,11 +739,12 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
         register,
         logout,
         syncToStorage,
-
+        isSyncing,
+        lastSyncTime,
+        syncLibraryWithCloud,
         heuristicStatus,
         isCheckingHeuristic,
         checkHeuristic,
-
         activeQuiz,
         userAnswers,
         questionNotes,
@@ -544,7 +754,6 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
         checkedQuestions,
         elapsedSeconds,
         isTimerRunning,
-
         startQuiz,
         selectAnswer,
         checkAnswer,
@@ -555,17 +764,14 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
         prevQuestion,
         finishQuiz,
         retryQuiz,
-
         savedQuizzes,
         saveQuizToLibrary,
         deleteQuizFromLibrary,
         history,
         clearHistory,
         viewAttemptResult,
-
         editorJsonBuffer,
         setEditorJsonBuffer,
-
         toasts,
         addToast,
         removeToast,
