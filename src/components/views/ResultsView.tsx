@@ -17,6 +17,7 @@ import {
   BookmarkCheck,
   Loader2,
   Lightbulb,
+  Share2,
 } from 'lucide-react';
 
 export function ResultsView() {
@@ -27,6 +28,7 @@ export function ResultsView() {
     history,
     retryQuiz,
     saveQuizToLibrary,
+    openShareModal,
     setView,
     addToast,
   } = useQuiz();
@@ -148,6 +150,17 @@ export function ResultsView() {
           >
             <BookmarkCheck className="w-3.5 h-3.5" />
             <span>Save to Library</span>
+          </Button>
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => openShareModal(currentQuiz)}
+            className="h-8 text-xs border-border/70 gap-1.5 text-sky-400 hover:text-sky-300 hover:border-sky-500/40"
+            title="Share this assessment"
+          >
+            <Share2 className="w-3.5 h-3.5" />
+            <span>Share</span>
           </Button>
         </div>
       </div>

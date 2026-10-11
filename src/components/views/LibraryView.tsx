@@ -24,6 +24,8 @@ import {
   Calendar,
   Layers,
   RefreshCw,
+  Share2,
+  KeyRound,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { Quiz } from '@/lib/types';
@@ -39,6 +41,8 @@ export function LibraryView() {
     isSyncing,
     syncLibraryWithCloud,
     lastSyncTime,
+    openShareModal,
+    setJoinModalOpen,
   } = useQuiz();
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -85,6 +89,17 @@ export function LibraryView() {
 
         {/* Right Action Bar */}
         <div className="flex items-center gap-2 w-full sm:w-auto">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setJoinModalOpen(true)}
+            className="h-8 text-xs gap-1.5 border-border/70 shrink-0"
+            title="Open test with share code or link"
+          >
+            <KeyRound className="w-3.5 h-3.5 text-primary" />
+            <span>Open Shared</span>
+          </Button>
+
           {user && (
             <Button
               variant="outline"
@@ -184,6 +199,17 @@ export function LibraryView() {
                   >
                     <FileCode2 className="w-3 h-3 text-primary" />
                     <span>JSON</span>
+                  </Button>
+
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => openShareModal(quiz)}
+                    className="h-7 text-xs border-border/60 gap-1 px-2.5 text-sky-400 hover:text-sky-300 hover:border-sky-500/40"
+                    title="Share Assessment"
+                  >
+                    <Share2 className="w-3 h-3 text-sky-400" />
+                    <span>Share</span>
                   </Button>
                 </div>
 

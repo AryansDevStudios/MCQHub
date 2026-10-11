@@ -22,6 +22,7 @@ import {
   saveActiveExamFirestore,
   fetchActiveExamFirestore,
 } from '@/lib/firestoreDb';
+import { createSharedQuizAction, getSharedQuizAction } from '@/lib/actions';
 
 interface QuizContextType {
   // Navigation & Theme
@@ -94,6 +95,20 @@ interface QuizContextType {
   toasts: Toast[];
   addToast: (message: string, type?: 'success' | 'error' | 'info') => void;
   removeToast: (id: string) => void;
+
+  // Share & Join Assessment functionality
+  shareModalOpen: boolean;
+  setShareModalOpen: (open: boolean) => void;
+  activeShareData: { quiz: Quiz; shareId: string; shareUrl: string } | null;
+  isSharing: boolean;
+  openShareModal: (quiz: Quiz) => Promise<void>;
+  pendingSharedQuiz: { shareId: string; quiz: Quiz; createdBy?: string; createdAt?: string } | null;
+  isLoadingSharedQuiz: boolean;
+  openSharedQuizById: (shareIdOrUrl: string) => Promise<boolean>;
+  acceptPendingSharedQuiz: (startImmediately: boolean, saveToLib: boolean) => void;
+  dismissPendingSharedQuiz: () => void;
+  joinModalOpen: boolean;
+  setJoinModalOpen: (open: boolean) => void;
 }
 
 const QuizContext = createContext<QuizContextType | null>(null);
@@ -146,6 +161,19 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
 
   // Notifications
   const [toasts, setToasts] = useState<Toast[]>([]);
+
+  // Share & Join Assessment functionality
+  const [shareModalOpen, setShareModalOpen] = useState<boolean>(false);
+  const [activeShareData, setActiveShareData] = useState<{ quiz: Quiz; shareId: string; shareUrl: string } | null>(null);
+  const [isSharing, setIsSharing] = useState<boolean>(false);
+  const [pendingSharedQuiz, setPendingSharedQuiz] = useState<{
+    shareId: string;
+    quiz: Quiz;
+    createdBy?: string;
+    createdAt?: string;
+  } | null>(null);
+  const [isLoadingSharedQuiz, setIsLoadingSharedQuiz] = useState<boolean>(false);
+  const [joinModalOpen, setJoinModalOpen] = useState<boolean>(false);
 
   // Refs for tracking synchronization state without re-render race conditions
   const userRef = useRef<UserProfile | null>(null);
@@ -381,6 +409,38 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
     // Alignment Sync with Firestore on start (once per app refresh)
     if (cachedUser) {
       syncLibraryWithCloud(true, cachedUser.username);
+    }
+
+    // 4. Check for Shared Assessment in URL (?share=... or ?test=...)
+    try {
+      if (typeof window !== 'undefined') {
+        const urlParams = new URLSearchParams(window.location.search);
+        const shareParam = urlParams.get('share') || urlParams.get('test');
+        if (shareParam) {
+          setIsLoadingSharedQuiz(true);
+          getSharedQuizAction(shareParam)
+            .then((res) => {
+              setIsLoadingSharedQuiz(false);
+              if (res.success && res.quiz) {
+                setPendingSharedQuiz({
+                  shareId: res.shareId || shareParam,
+                  quiz: res.quiz,
+                  createdBy: res.createdBy,
+                  createdAt: res.createdAt,
+                });
+                addToast(`Shared Assessment loaded: "${res.quiz.title}"`, 'info');
+              } else {
+                addToast(res.error || 'Shared assessment link has expired', 'error');
+              }
+            })
+            .catch((err) => {
+              setIsLoadingSharedQuiz(false);
+              console.warn('Failed to load shared quiz from URL:', err);
+            });
+        }
+      }
+    } catch (e) {
+      console.warn('Error reading URL params:', e);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -985,6 +1045,108 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
     setViewState('results');
   };
 
+  // Share Assessment Operations
+  const openShareModal = async (quiz: Quiz) => {
+    if (!quiz || !quiz.title || !quiz.questions || quiz.questions.length === 0) {
+      addToast('Cannot share an empty quiz', 'error');
+      return;
+    }
+
+    setIsSharing(true);
+    try {
+      const res = await createSharedQuizAction(quiz, user?.displayName || user?.username);
+      if (res.success && res.shareId) {
+        const origin = typeof window !== 'undefined' ? window.location.origin : 'https://mcqhub.pages.dev';
+        const shareUrl = `${origin}/?share=${res.shareId}`;
+        setActiveShareData({
+          quiz,
+          shareId: res.shareId,
+          shareUrl,
+        });
+        setShareModalOpen(true);
+        if (typeof navigator !== 'undefined' && navigator.clipboard) {
+          navigator.clipboard.writeText(shareUrl).then(() => {
+            addToast('Share link created & copied to clipboard!', 'success');
+          }).catch(() => {
+            addToast('Share link created successfully!', 'success');
+          });
+        }
+      } else {
+        addToast(res.error || 'Failed to generate share link', 'error');
+      }
+    } catch (err: any) {
+      addToast('Error sharing quiz: ' + err.message, 'error');
+    } finally {
+      setIsSharing(false);
+    }
+  };
+
+  const openSharedQuizById = async (shareIdOrUrl: string): Promise<boolean> => {
+    let cleanId = shareIdOrUrl.trim();
+    if (cleanId.includes('?share=')) {
+      cleanId = cleanId.split('?share=')[1].split('&')[0];
+    } else if (cleanId.includes('?test=')) {
+      cleanId = cleanId.split('?test=')[1].split('&')[0];
+    }
+
+    if (!cleanId) {
+      addToast('Please enter a valid Share Code or Link', 'error');
+      return false;
+    }
+
+    setIsLoadingSharedQuiz(true);
+    try {
+      const res = await getSharedQuizAction(cleanId);
+      if (res.success && res.quiz) {
+        setPendingSharedQuiz({
+          shareId: res.shareId || cleanId,
+          quiz: res.quiz,
+          createdBy: res.createdBy,
+          createdAt: res.createdAt,
+        });
+        setJoinModalOpen(false);
+        addToast(`Loaded shared assessment: "${res.quiz.title}"`, 'success');
+        return true;
+      } else {
+        addToast(res.error || 'Assessment not found. Please verify the code.', 'error');
+        return false;
+      }
+    } catch (err: any) {
+      addToast('Error loading test: ' + err.message, 'error');
+      return false;
+    } finally {
+      setIsLoadingSharedQuiz(false);
+    }
+  };
+
+  const acceptPendingSharedQuiz = (startImmediately: boolean, saveToLib: boolean) => {
+    if (!pendingSharedQuiz) return;
+    const targetQuiz = pendingSharedQuiz.quiz;
+
+    if (saveToLib) {
+      saveQuizToLibrary(targetQuiz);
+      addToast(`"${targetQuiz.title}" saved to your Library!`, 'success');
+    }
+
+    if (startImmediately) {
+      startQuiz(targetQuiz, false);
+      addToast(`Starting: "${targetQuiz.title}"`, 'info');
+    }
+
+    if (typeof window !== 'undefined' && window.history && window.history.replaceState) {
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+
+    setPendingSharedQuiz(null);
+  };
+
+  const dismissPendingSharedQuiz = () => {
+    if (typeof window !== 'undefined' && window.history && window.history.replaceState) {
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+    setPendingSharedQuiz(null);
+  };
+
   return (
     <QuizContext.Provider
       value={{
@@ -1039,6 +1201,18 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
         toasts,
         addToast,
         removeToast,
+        shareModalOpen,
+        setShareModalOpen,
+        activeShareData,
+        isSharing,
+        openShareModal,
+        pendingSharedQuiz,
+        isLoadingSharedQuiz,
+        openSharedQuizById,
+        acceptPendingSharedQuiz,
+        dismissPendingSharedQuiz,
+        joinModalOpen,
+        setJoinModalOpen,
       }}
     >
       {children}

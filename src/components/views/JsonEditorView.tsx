@@ -17,6 +17,7 @@ import {
   Sparkles,
   ChevronDown,
   ChevronUp,
+  Share2,
 } from 'lucide-react';
 import type { Quiz } from '@/lib/types';
 
@@ -92,6 +93,7 @@ export function JsonEditorView() {
     editorJsonBuffer,
     setEditorJsonBuffer,
     addToast,
+    openShareModal,
   } = useQuiz();
 
   const [jsonText, setJsonText] = useState('');
@@ -180,6 +182,26 @@ export function JsonEditorView() {
     } catch (e: any) {
       setParseError(e.message);
       addToast('Invalid JSON: ' + e.message, 'error');
+    }
+  };
+
+  const handleShare = () => {
+    try {
+      const parsed = JSON.parse(jsonText);
+      if (!parsed.questions || !Array.isArray(parsed.questions) || parsed.questions.length === 0) {
+        setParseError('The JSON must contain a "questions" array with at least 1 question.');
+        addToast('Invalid quiz: missing questions array', 'error');
+        return;
+      }
+      const quizToShare: Quiz = {
+        title: titleOverride.trim() || parsed.title || 'Custom Assessment',
+        questions: parsed.questions,
+        createdAt: new Date().toISOString(),
+      };
+      openShareModal(quizToShare);
+    } catch (e: any) {
+      setParseError('Invalid JSON: ' + e.message);
+      addToast('Cannot share: Invalid JSON syntax', 'error');
     }
   };
 
@@ -301,13 +323,22 @@ export function JsonEditorView() {
               />
             </div>
 
-            <div className="pt-2">
+            <div className="pt-2 flex items-center gap-2">
               <Button
                 onClick={handleRun}
-                className="w-full h-9 text-xs font-semibold bg-primary text-primary-foreground shadow-xs"
+                className="flex-1 h-9 text-xs font-semibold bg-primary text-primary-foreground shadow-xs"
               >
                 <Play className="w-3.5 h-3.5 mr-1.5 fill-current" />
                 Launch Quiz
+              </Button>
+              <Button
+                variant="outline"
+                onClick={handleShare}
+                className="h-9 text-xs border-border/80 gap-1.5 px-3 text-sky-400 hover:text-sky-300 hover:border-sky-500/40"
+                title="Share this assessment"
+              >
+                <Share2 className="w-3.5 h-3.5" />
+                <span>Share</span>
               </Button>
             </div>
           </div>

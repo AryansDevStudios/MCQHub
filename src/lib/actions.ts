@@ -1,5 +1,6 @@
 import type { GenerateQuizFromTopicInput } from '@/ai/flows/generate-quiz-from-topic';
 import type { SummarizeQuizResultsInput } from '@/ai/flows/summarize-quiz-results';
+import type { Quiz } from '@/lib/types';
 
 const CF_WORKER_URL = process.env.NEXT_PUBLIC_CF_WORKER_URL || 'https://mcqhub.adsbackend01.workers.dev';
 
@@ -211,4 +212,55 @@ Respond directly in clean Markdown.`;
     success: false,
     error: 'Failed to generate diagnostic report.',
   };
+}
+
+/**
+ * Create a shared assessment in Firestore through Cloudflare Worker
+ */
+export async function createSharedQuizAction(
+  quiz: Quiz,
+  createdBy?: string
+): Promise<{ success: boolean; shareId?: string; error?: string }> {
+  try {
+    const res = await fetch(`${CF_WORKER_URL}/api/share/create`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ quiz, createdBy }),
+    });
+
+    const data = await res.json();
+    if (res.ok && data.success) {
+      return { success: true, shareId: data.shareId };
+    }
+    return { success: false, error: data.error || 'Failed to generate share link' };
+  } catch (err: any) {
+    return { success: false, error: err?.message || 'Network error sharing assessment' };
+  }
+}
+
+/**
+ * Retrieve a shared assessment from Firestore through Cloudflare Worker
+ */
+export async function getSharedQuizAction(shareId: string): Promise<{
+  success: boolean;
+  quiz?: Quiz;
+  createdBy?: string;
+  createdAt?: string;
+  error?: string;
+}> {
+  try {
+    const res = await fetch(`${CF_WORKER_URL}/api/share/get?id=${encodeURIComponent(shareId)}`);
+    const data = await res.json();
+    if (res.ok && data.success && data.quiz) {
+      return {
+        success: true,
+        quiz: data.quiz,
+        createdBy: data.createdBy,
+        createdAt: data.createdAt,
+      };
+    }
+    return { success: false, error: data.error || 'Shared assessment not found' };
+  } catch (err: any) {
+    return { success: false, error: err?.message || 'Network error loading shared assessment' };
+  }
 }

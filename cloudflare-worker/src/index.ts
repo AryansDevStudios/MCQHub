@@ -412,6 +412,59 @@ export default {
         }
       }
 
+      // 7c. Share Quiz: Create Shareable Assessment in Firestore
+      if (url.pathname === '/api/share/create' && request.method === 'POST') {
+        const body = (await request.json()) as any;
+        const { quiz, createdBy } = body;
+        if (!quiz || !quiz.title || !Array.isArray(quiz.questions) || quiz.questions.length === 0) {
+          return jsonResponse({ success: false, error: 'Valid quiz with questions is required' }, 400);
+        }
+
+        const shareId = quiz.id
+          ? quiz.id.toString().replace(/[^a-zA-Z0-9_-]/g, '_')
+          : `mcq_${Math.random().toString(36).substring(2, 9)}`;
+
+        const now = new Date().toISOString();
+        await patchFirestoreDoc(
+          env,
+          `shared_quizzes/${shareId}`,
+          {
+            shareId,
+            quiz,
+            createdBy: createdBy || 'anonymous',
+            createdAt: now,
+          }
+        );
+
+        return jsonResponse({
+          success: true,
+          shareId,
+        });
+      }
+
+      // 7d. Share Quiz: Retrieve Shared Assessment from Firestore
+      if (url.pathname === '/api/share/get' && request.method === 'GET') {
+        const id = url.searchParams.get('id') || '';
+        const cleanId = id.trim().replace(/[^a-zA-Z0-9_-]/g, '_');
+        if (!cleanId) {
+          return jsonResponse({ success: false, error: 'Share ID is required' }, 400);
+        }
+
+        const doc = await getFirestoreDoc(env, `shared_quizzes/${cleanId}`);
+        if (!doc) {
+          return jsonResponse({ success: false, error: 'Shared assessment not found or link has expired.' }, 404);
+        }
+
+        const data = parseDocFields(doc);
+        return jsonResponse({
+          success: true,
+          shareId: data.shareId || cleanId,
+          quiz: data.quiz,
+          createdBy: data.createdBy || 'anonymous',
+          createdAt: data.createdAt,
+        });
+      }
+
       // 8. Generate Quiz endpoint
       if (url.pathname === '/api/generate-quiz' && request.method === 'POST') {
         const apiKey = env.GEMINI_API_KEY || (request.headers.get('Authorization') || '').replace('Bearer ', '');

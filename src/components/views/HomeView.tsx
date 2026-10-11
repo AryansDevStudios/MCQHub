@@ -19,6 +19,7 @@ import {
   Loader2,
   CheckCircle2,
   Zap,
+  Share2,
 } from 'lucide-react';
 import type { Quiz } from '@/lib/types';
 
@@ -34,6 +35,8 @@ export function HomeView() {
     activeExamSession,
     resumeActiveExam,
     discardActiveExam,
+    openShareModal,
+    isSharing,
   } = useQuiz();
 
   const [topic, setTopic] = useState('');
@@ -421,6 +424,17 @@ export function HomeView() {
             >
               <Play className="w-3.5 h-3.5 mr-1.5 fill-current" />
               Start Quiz Now
+            </Button>
+
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={isSharing}
+              onClick={() => openShareModal(generatedQuiz)}
+              className="h-8 text-xs border-emerald-500/40 text-emerald-300 hover:text-emerald-200 hover:bg-emerald-950/50"
+            >
+              <Share2 className="w-3.5 h-3.5 mr-1.5" />
+              {isSharing ? 'Sharing...' : 'Share Quiz'}
             </Button>
 
             <Button

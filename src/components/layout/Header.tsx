@@ -12,12 +12,13 @@ import {
   History,
   User,
   Settings,
+  Share2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { ViewState } from '@/lib/types';
 
 export function Header() {
-  const { view, setView, user } = useQuiz();
+  const { view, setView, user, setJoinModalOpen } = useQuiz();
   const [authDialogOpen, setAuthDialogOpen] = useState(false);
   const [authDialogTab, setAuthDialogTab] = useState<'auth' | 'settings' | 'sessions'>('auth');
 
@@ -46,8 +47,8 @@ export function Header() {
               className="flex items-center gap-2 pr-1 sm:pr-2 hover:opacity-85 transition-opacity shrink-0"
               title="MCQHub Home"
             >
-              <div className="w-7 h-7 rounded-md bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shadow-xs">
-                <Logo className="w-4 h-4" />
+              <div className="w-7 h-7 rounded-lg overflow-hidden border border-border/70 flex items-center justify-center shadow-xs shrink-0 bg-card">
+                <Logo className="w-full h-full object-cover" />
               </div>
               <span className="font-bold text-sm tracking-tight text-foreground hidden sm:inline">
                 MCQHub
@@ -85,6 +86,16 @@ export function Header() {
 
           {/* Right Controls */}
           <div className="flex items-center gap-1 sm:gap-2 shrink-0">
+            {/* Open Shared Quiz Button */}
+            <button
+              onClick={() => setJoinModalOpen(true)}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs border border-border/80 hover:bg-muted/50 text-muted-foreground hover:text-foreground transition-colors"
+              title="Open test by Share Code or Link"
+            >
+              <Share2 className="w-3.5 h-3.5 text-sky-400" />
+              <span className="hidden sm:inline text-xs">Join / Code</span>
+            </button>
+
             {/* User Account Button */}
             <button
               onClick={() => openAuthWithTab('auth')}

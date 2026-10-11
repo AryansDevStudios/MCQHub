@@ -5,6 +5,9 @@ import { QuizProvider, useQuiz } from '@/context/QuizProvider';
 import { Header } from '@/components/layout/Header';
 import { StatusBar } from '@/components/layout/StatusBar';
 import { ToastContainer } from '@/components/layout/ToastContainer';
+import { ShareQuizDialog } from '@/components/share/ShareQuizDialog';
+import { SharedQuizPromptDialog } from '@/components/share/SharedQuizPromptDialog';
+import { JoinQuizDialog } from '@/components/share/JoinQuizDialog';
 
 function AppShell({ children }: { children: React.ReactNode }) {
   const { theme } = useQuiz();
@@ -26,6 +29,9 @@ function AppShell({ children }: { children: React.ReactNode }) {
       </main>
       <StatusBar />
       <ToastContainer />
+      <ShareQuizDialog />
+      <SharedQuizPromptDialog />
+      <JoinQuizDialog />
     </div>
   );
 }
