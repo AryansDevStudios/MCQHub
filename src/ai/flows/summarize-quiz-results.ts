@@ -10,6 +10,8 @@ export const SummarizeQuizResultsInputSchema = z.object({
     })
   ).describe('An array of quiz questions with their correct answers.'),
   userAnswers: z.record(z.string(), z.number()).describe("A map of question index to the user's answer."),
+  score: z.number().optional().describe('Score achieved by the user.'),
+  total: z.number().optional().describe('Total questions in the quiz.'),
   customApiKey: z.string().optional().describe('Optional custom Gemini API key.'),
 });
 

@@ -281,6 +281,8 @@ export default {
           quizzes: Array.isArray(userData.quizzes) ? userData.quizzes : [],
           history: Array.isArray(userData.history) ? userData.history : [],
           activeExam: userData.activeExam || null,
+          encryptedApiKey: userData.encryptedApiKey || null,
+          syncAiSettings: !!userData.syncAiSettings,
         });
       }
 
@@ -331,6 +333,8 @@ export default {
           history: Array.isArray(userData.history) ? userData.history : [],
           sessions: Array.isArray(userData.sessions) ? userData.sessions : [],
           activeExam: userData.activeExam || null,
+          encryptedApiKey: userData.encryptedApiKey || null,
+          syncAiSettings: !!userData.syncAiSettings,
         });
       }
 
@@ -477,6 +481,50 @@ export default {
           createdBy: data.createdBy || 'anonymous',
           createdAt: data.createdAt,
         });
+      }
+
+      // 7d. User AI Token Sync & Storage
+      if (url.pathname === '/api/user/ai-token' && request.method === 'POST') {
+        const body = (await request.json()) as any;
+        const { username, encryptedApiKey, syncAiSettings } = body;
+        const cleanUser = sanitizeUsername(username);
+        if (!cleanUser) {
+          return jsonResponse({ success: false, error: 'Username required' }, 400);
+        }
+
+        await patchFirestoreDoc(
+          env,
+          `users/${cleanUser}`,
+          {
+            encryptedApiKey: encryptedApiKey || null,
+            syncAiSettings: !!syncAiSettings,
+          },
+          ['encryptedApiKey', 'syncAiSettings']
+        );
+
+        return jsonResponse({ success: true, synced: !!syncAiSettings });
+      }
+
+      // 7e. User AI Token Deletion (Permanently delete from database)
+      if (url.pathname === '/api/user/ai-token/delete' || (url.pathname === '/api/user/ai-token' && request.method === 'DELETE')) {
+        const body = request.method === 'POST' ? ((await request.json().catch(() => ({}))) as any) : {};
+        const username = body?.username || url.searchParams.get('username') || '';
+        const cleanUser = sanitizeUsername(username);
+        if (!cleanUser) {
+          return jsonResponse({ success: false, error: 'Username required' }, 400);
+        }
+
+        await patchFirestoreDoc(
+          env,
+          `users/${cleanUser}`,
+          {
+            encryptedApiKey: null,
+            syncAiSettings: false,
+          },
+          ['encryptedApiKey', 'syncAiSettings']
+        );
+
+        return jsonResponse({ success: true, message: 'AI token permanently deleted from cloud database' });
       }
 
       // 8. Generate Quiz endpoint

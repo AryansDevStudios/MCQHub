@@ -24,6 +24,7 @@ import {
   fetchServerTime,
 } from '@/lib/firestoreDb';
 import { createSharedQuizAction, getSharedQuizAction } from '@/lib/actions';
+import { decryptToken } from '@/lib/crypto';
 
 interface QuizContextType {
   // Navigation & Theme
@@ -126,6 +127,8 @@ const STORAGE_KEYS = {
   DELETED_QUIZZES: 'mcqhub_deleted_quizzes',
   LAST_SYNC: 'mcqhub_last_sync',
   ACTIVE_EXAM: 'mcqhub_active_exam',
+  API_KEY: 'mcqhub_gemini_api_key',
+  SYNC_AI_SETTING: 'mcqhub_sync_ai_setting',
 };
 
 export function QuizProvider({ children }: { children: React.ReactNode }) {
@@ -346,6 +349,23 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
           if (remoteTime > lastLocalUpdateRef.current) {
             setActiveExamSession(cloudRes.activeExam);
             localStorage.setItem(STORAGE_KEYS.ACTIVE_EXAM, JSON.stringify(cloudRes.activeExam));
+          }
+        }
+
+        // Reconcile Encrypted AI Token (if account sync is active)
+        if (cloudRes.syncAiSettings && cloudRes.encryptedApiKey) {
+          try {
+            const decryptedToken = await decryptToken(cloudRes.encryptedApiKey, activeUsername);
+            if (decryptedToken) {
+              localStorage.setItem(STORAGE_KEYS.API_KEY, decryptedToken);
+              localStorage.setItem(STORAGE_KEYS.SYNC_AI_SETTING, 'true');
+            }
+          } catch (e) {
+            console.warn('Failed to decrypt synced AI token:', e);
+          }
+        } else if (cloudRes.syncAiSettings === false && cloudRes.encryptedApiKey === null) {
+          if (localStorage.getItem(STORAGE_KEYS.SYNC_AI_SETTING) === 'true') {
+            localStorage.setItem(STORAGE_KEYS.SYNC_AI_SETTING, 'false');
           }
         }
 

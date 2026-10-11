@@ -166,6 +166,8 @@ export async function loginUserFirestore(
   quizzes?: Quiz[];
   history?: QuizAttempt[];
   activeExam?: ActiveExamSession | null;
+  encryptedApiKey?: string | null;
+  syncAiSettings?: boolean;
   error?: string;
 }> {
   const cleanUser = sanitizeUsername(username);
@@ -193,6 +195,8 @@ export async function loginUserFirestore(
       quizzes: data.quizzes || [],
       history: data.history || [],
       activeExam: data.activeExam || null,
+      encryptedApiKey: data.encryptedApiKey || null,
+      syncAiSettings: !!data.syncAiSettings,
     });
 
     return {
@@ -202,6 +206,8 @@ export async function loginUserFirestore(
       quizzes: data.quizzes || [],
       history: data.history || [],
       activeExam: data.activeExam || null,
+      encryptedApiKey: data.encryptedApiKey || null,
+      syncAiSettings: !!data.syncAiSettings,
     };
   } catch (err: any) {
     // Offline local cache fallback
@@ -391,6 +397,8 @@ export async function fetchUserDataFirestore(username: string): Promise<{
   sessions?: UserSession[];
   activeExam?: ActiveExamSession | null;
   profile?: UserProfile;
+  encryptedApiKey?: string | null;
+  syncAiSettings?: boolean;
   error?: string;
 }> {
   const cleanUser = sanitizeUsername(username);
@@ -406,6 +414,8 @@ export async function fetchUserDataFirestore(username: string): Promise<{
           sessions: Array.isArray(data.sessions) ? data.sessions : [],
           activeExam: data.activeExam || null,
           profile: data.profile,
+          encryptedApiKey: data.encryptedApiKey || null,
+          syncAiSettings: !!data.syncAiSettings,
         };
       }
     }
@@ -423,8 +433,62 @@ export async function fetchUserDataFirestore(username: string): Promise<{
       sessions: backup.sessions || [],
       activeExam: backup.activeExam || null,
       profile: backup,
+      encryptedApiKey: backup.encryptedApiKey || null,
+      syncAiSettings: !!backup.syncAiSettings,
     };
   }
 
   return { success: false, error: 'Could not fetch user data' };
+}
+
+/**
+ * Save encrypted AI API token and sync preference to Cloud Firestore
+ */
+export async function saveUserAiTokenFirestore(
+  username: string,
+  encryptedApiKey: string | null,
+  syncAiSettings: boolean
+): Promise<boolean> {
+  const cleanUser = sanitizeUsername(username);
+  const backup = getLocalUserBackup(cleanUser) || {};
+  backup.encryptedApiKey = encryptedApiKey;
+  backup.syncAiSettings = syncAiSettings;
+  setLocalUserBackup(cleanUser, backup);
+
+  try {
+    const res = await fetch(`${CF_WORKER_URL}/api/user/ai-token`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        username: cleanUser,
+        encryptedApiKey,
+        syncAiSettings,
+      }),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Permanently delete encrypted AI token from Cloud Firestore
+ */
+export async function deleteUserAiTokenFirestore(username: string): Promise<boolean> {
+  const cleanUser = sanitizeUsername(username);
+  const backup = getLocalUserBackup(cleanUser) || {};
+  backup.encryptedApiKey = null;
+  backup.syncAiSettings = false;
+  setLocalUserBackup(cleanUser, backup);
+
+  try {
+    const res = await fetch(`${CF_WORKER_URL}/api/user/ai-token/delete`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: cleanUser }),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
 }

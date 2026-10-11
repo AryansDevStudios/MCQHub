@@ -243,6 +243,7 @@ export async function createSharedQuizAction(
  */
 export async function getSharedQuizAction(shareId: string): Promise<{
   success: boolean;
+  shareId?: string;
   quiz?: Quiz;
   createdBy?: string;
   createdAt?: string;
@@ -254,6 +255,7 @@ export async function getSharedQuizAction(shareId: string): Promise<{
     if (res.ok && data.success && data.quiz) {
       return {
         success: true,
+        shareId: data.shareId || shareId,
         quiz: data.quiz,
         createdBy: data.createdBy,
         createdAt: data.createdAt,
