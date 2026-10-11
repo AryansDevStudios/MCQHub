@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useQuiz } from '@/context/QuizProvider';
 import { generateQuizAction } from '@/lib/actions';
 import { Button } from '@/components/ui/button';
@@ -24,6 +24,47 @@ import {
 import type { Quiz } from '@/lib/types';
 
 const STORAGE_API_KEY = 'mcqhub_gemini_api_key';
+
+export interface TopicPreset {
+  title: string;
+  display: string;
+  grade: 'Class 10' | 'Class 9' | 'Class 8' | 'Class 11' | 'Class 12';
+  subject: 'Science' | 'Social Studies' | 'Math' | 'Physics' | 'Chemistry' | 'Biology';
+}
+
+export const TOPIC_PRESETS: TopicPreset[] = [
+  // Class 10 (Primary Focus - Board Curriculum)
+  { title: 'Light: Reflection & Refraction (Class 10 Science)', display: 'Light: Reflection & Refraction', grade: 'Class 10', subject: 'Science' },
+  { title: 'Chemical Reactions and Equations (Class 10 Science)', display: 'Chemical Reactions & Equations', grade: 'Class 10', subject: 'Science' },
+  { title: 'Life Processes (Class 10 Science)', display: 'Life Processes (Nutrition & Respiration)', grade: 'Class 10', subject: 'Science' },
+  { title: 'Electricity & Magnetic Effects (Class 10 Science)', display: 'Electricity & Circuits', grade: 'Class 10', subject: 'Science' },
+  { title: 'Acids, Bases and Salts (Class 10 Science)', display: 'Acids, Bases & Salts', grade: 'Class 10', subject: 'Science' },
+  { title: 'Nationalism in India (Class 10 SST)', display: 'Nationalism in India', grade: 'Class 10', subject: 'Social Studies' },
+  { title: 'Power Sharing & Federalism (Class 10 SST)', display: 'Power Sharing & Federalism', grade: 'Class 10', subject: 'Social Studies' },
+  { title: 'Resources and Development (Class 10 SST)', display: 'Resources and Development', grade: 'Class 10', subject: 'Social Studies' },
+  { title: 'Sectors of the Indian Economy (Class 10 SST)', display: 'Sectors of the Economy', grade: 'Class 10', subject: 'Social Studies' },
+  { title: 'Trigonometry & Applications (Class 10 Math)', display: 'Trigonometry & Heights', grade: 'Class 10', subject: 'Math' },
+  { title: 'Quadratic Equations & Arithmetic Progressions (Class 10 Math)', display: 'Quadratic Equations & AP', grade: 'Class 10', subject: 'Math' },
+
+  // Class 9
+  { title: 'Matter in Our Surroundings (Class 9 Science)', display: 'Matter in Our Surroundings', grade: 'Class 9', subject: 'Science' },
+  { title: 'Force and Laws of Motion (Class 9 Science)', display: 'Force & Laws of Motion', grade: 'Class 9', subject: 'Science' },
+  { title: 'The French Revolution (Class 9 SST)', display: 'The French Revolution', grade: 'Class 9', subject: 'Social Studies' },
+
+  // Class 8
+  { title: 'Cell Structure and Microorganisms (Class 8 Science)', display: 'Cell Structure & Functions', grade: 'Class 8', subject: 'Science' },
+  { title: 'Force and Pressure (Class 8 Science)', display: 'Force & Pressure', grade: 'Class 8', subject: 'Science' },
+  { title: 'The Indian Constitution (Class 8 SST)', display: 'The Indian Constitution', grade: 'Class 8', subject: 'Social Studies' },
+
+  // Class 11
+  { title: 'Kinematics & Laws of Motion (Class 11 Physics)', display: 'Kinematics & Laws of Motion', grade: 'Class 11', subject: 'Physics' },
+  { title: 'Chemical Bonding & Molecular Structure (Class 11 Chemistry)', display: 'Chemical Bonding', grade: 'Class 11', subject: 'Chemistry' },
+
+  // Class 12
+  { title: 'Electrostatics & Current Electricity (Class 12 Physics)', display: 'Electrostatics & Current', grade: 'Class 12', subject: 'Physics' },
+  { title: 'Solutions & Electrochemistry (Class 12 Chemistry)', display: 'Solutions & Electrochemistry', grade: 'Class 12', subject: 'Chemistry' },
+  { title: 'Genetics and Evolution (Class 12 Biology)', display: 'Genetics & Evolution', grade: 'Class 12', subject: 'Biology' },
+];
 
 export function HomeView() {
   const {
@@ -54,20 +95,29 @@ export function HomeView() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedQuiz, setGeneratedQuiz] = useState<Quiz | null>(null);
 
+  // Chapter ideas filter - Class 10 selected by default as primary focus
+  const [presetFilter, setPresetFilter] = useState<'Class 10' | 'All' | 'Science' | 'SST' | 'Class 8-9' | 'Class 11-12'>('Class 10');
+
+  const filteredPresets = useMemo(() => {
+    if (presetFilter === 'All') return TOPIC_PRESETS;
+    if (presetFilter === 'Class 10') return TOPIC_PRESETS.filter((p) => p.grade === 'Class 10');
+    if (presetFilter === 'Science') {
+      return TOPIC_PRESETS.filter(
+        (p) => p.subject === 'Science' || p.subject === 'Physics' || p.subject === 'Chemistry' || p.subject === 'Biology'
+      );
+    }
+    if (presetFilter === 'SST') return TOPIC_PRESETS.filter((p) => p.subject === 'Social Studies');
+    if (presetFilter === 'Class 8-9') return TOPIC_PRESETS.filter((p) => p.grade === 'Class 8' || p.grade === 'Class 9');
+    if (presetFilter === 'Class 11-12') return TOPIC_PRESETS.filter((p) => p.grade === 'Class 11' || p.grade === 'Class 12');
+    return TOPIC_PRESETS;
+  }, [presetFilter]);
+
   useEffect(() => {
     try {
       const storedKey = localStorage.getItem(STORAGE_API_KEY);
       setHasCustomKey(!!storedKey);
     } catch {}
   }, []);
-
-  const topicPresets = [
-    'Calculus & Derivatives',
-    'Quantum Mechanics',
-    'Operating Systems',
-    'Data Structures & Algorithms',
-    'Organic Chemistry',
-  ];
 
   const handleGenerate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -204,26 +254,67 @@ export function HomeView() {
             </Label>
             <Input
               type="text"
-              placeholder="e.g., Fourier Transform, Special Relativity, Database Indexing..."
+              placeholder="e.g., Light: Reflection & Refraction (Class 10), Life Processes, Nationalism in India..."
               value={topic}
               onChange={(e) => setTopic(e.target.value)}
               className="h-9 text-xs sm:text-sm bg-background"
               required
             />
 
-            {/* Topic Preset Chips */}
-            <div className="flex flex-wrap items-center gap-1.5 pt-1">
-              <span className="text-[11px] text-muted-foreground">Ideas:</span>
-              {topicPresets.map((preset) => (
-                <button
-                  type="button"
-                  key={preset}
-                  onClick={() => setTopic(preset)}
-                  className="px-2 py-0.5 rounded text-[11px] bg-muted/60 hover:bg-muted border border-border/60 text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  {preset}
-                </button>
-              ))}
+            {/* Chapter Ideas & Category Filter */}
+            <div className="space-y-2 pt-1.5">
+              <div className="flex flex-wrap items-center justify-between gap-1.5">
+                <div className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
+                  <Sparkles className="w-3.5 h-3.5 text-primary" />
+                  <span>Chapter Ideas ({filteredPresets.length}):</span>
+                </div>
+                
+                {/* Category Filter Pills */}
+                <div className="flex flex-wrap items-center gap-1">
+                  {(['Class 10', 'All', 'Science', 'SST', 'Class 8-9', 'Class 11-12'] as const).map((cat) => (
+                    <button
+                      type="button"
+                      key={cat}
+                      onClick={() => setPresetFilter(cat)}
+                      className={`px-2 py-0.5 rounded text-[10px] sm:text-[11px] font-medium transition-all ${
+                        presetFilter === cat
+                          ? 'bg-primary text-primary-foreground shadow-xs'
+                          : 'bg-muted/50 hover:bg-muted text-muted-foreground hover:text-foreground border border-border/50'
+                      }`}
+                    >
+                      {cat === 'Class 10' ? 'Class 10 ⭐' : cat === 'SST' ? 'SST' : cat}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Preset Chips */}
+              <div className="flex flex-wrap items-center gap-1.5 max-h-40 overflow-y-auto pr-1 py-0.5">
+                {filteredPresets.map((preset) => {
+                  const isSelected = topic === preset.title;
+                  return (
+                    <button
+                      type="button"
+                      key={preset.title}
+                      onClick={() => setTopic(preset.title)}
+                      className={`group inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] border transition-all text-left ${
+                        isSelected
+                          ? 'bg-primary/10 border-primary text-primary font-medium shadow-xs'
+                          : 'bg-muted/30 hover:bg-muted/80 border-border/70 text-foreground/80 hover:text-foreground'
+                      }`}
+                    >
+                      <span>{preset.display}</span>
+                      <span className={`text-[9px] px-1 py-0.2 rounded font-mono font-medium ${
+                        preset.grade === 'Class 10'
+                          ? 'bg-primary/15 text-primary'
+                          : 'bg-muted text-muted-foreground'
+                      }`}>
+                        {preset.grade.replace('Class ', '')}th {preset.subject === 'Social Studies' ? 'SST' : preset.subject}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           </div>
 
