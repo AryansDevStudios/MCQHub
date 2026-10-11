@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useQuiz } from '@/context/QuizProvider';
 import MarkdownRenderer from '@/components/MarkdownRenderer';
 import { Button } from '@/components/ui/button';
@@ -20,6 +20,7 @@ import {
   Lightbulb,
   Check,
   Cloud,
+  Keyboard,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -50,6 +51,129 @@ export function QuizView() {
 
   const [showNoteInput, setShowNoteInput] = useState(false);
 
+  // Full Keyboard-Driven Assessment Navigation & Option Selection
+  useEffect(() => {
+    if (!activeQuiz || !activeQuiz.questions || activeQuiz.questions.length === 0) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // 1. Never intercept when user is typing in a textarea, input, or contenteditable
+      const target = e.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.isContentEditable ||
+          target.closest('input') ||
+          target.closest('textarea'))
+      ) {
+        return;
+      }
+
+      // 2. Ignore if a modal / alert dialog is currently open
+      if (document.querySelector('[role="dialog"][data-state="open"]')) {
+        return;
+      }
+
+      const currentQ = activeQuiz.questions[currentQuestionIndex];
+      if (!currentQ) return;
+      const totalQ = activeQuiz.questions.length;
+      const isCurChecked = !!checkedQuestions[currentQuestionIndex];
+      const curSelected = userAnswers[currentQuestionIndex];
+
+      // 3. Option Selection: Keys 1 through 9 (standard top-row numbers or numpad)
+      const numMatch = e.code.match(/^(Digit|Numpad)([1-9])$/);
+      if (numMatch) {
+        const optionNum = parseInt(numMatch[2], 10);
+        const optIdx = optionNum - 1;
+        if (currentQ.options && optIdx < currentQ.options.length) {
+          if (!(isInstantMode && isCurChecked)) {
+            e.preventDefault();
+            selectAnswer(currentQuestionIndex, optIdx);
+          }
+        }
+        return;
+      }
+
+      // 4. Arrow Navigation (Left = Previous, Right = Next)
+      if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        if (currentQuestionIndex > 0) {
+          prevQuestion();
+        }
+        return;
+      }
+
+      if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        if (currentQuestionIndex < totalQ - 1) {
+          nextQuestion();
+        }
+        return;
+      }
+
+      // 5. Up / Down Arrows (Cycle through choices)
+      if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+        if (!(isInstantMode && isCurChecked) && currentQ.options && currentQ.options.length > 0) {
+          e.preventDefault();
+          const numOptions = currentQ.options.length;
+          let nextOpt = 0;
+          if (curSelected === undefined) {
+            nextOpt = e.key === 'ArrowDown' ? 0 : numOptions - 1;
+          } else {
+            if (e.key === 'ArrowDown') {
+              nextOpt = (curSelected + 1) % numOptions;
+            } else {
+              nextOpt = (curSelected - 1 + numOptions) % numOptions;
+            }
+          }
+          selectAnswer(currentQuestionIndex, nextOpt);
+        }
+        return;
+      }
+
+      // 6. Enter or Spacebar: Mark question done / Next question / Finish Exam
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+
+        if (isInstantMode) {
+          if (!isCurChecked) {
+            // Check current question answer
+            checkAnswer(currentQuestionIndex);
+          } else {
+            // Already checked: advance to next or finish
+            if (currentQuestionIndex < totalQ - 1) {
+              nextQuestion();
+            } else {
+              finishQuiz();
+            }
+          }
+        } else {
+          // Standard examination mode: Advance or submit
+          if (currentQuestionIndex < totalQ - 1) {
+            nextQuestion();
+          } else {
+            finishQuiz();
+          }
+        }
+        return;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [
+    activeQuiz,
+    currentQuestionIndex,
+    checkedQuestions,
+    userAnswers,
+    isInstantMode,
+    selectAnswer,
+    checkAnswer,
+    nextQuestion,
+    prevQuestion,
+    finishQuiz,
+  ]);
+
   if (!activeQuiz || !activeQuiz.questions || activeQuiz.questions.length === 0) {
     return (
       <div className="max-w-md mx-auto py-16 px-4 text-center space-y-4">
@@ -77,7 +201,7 @@ export function QuizView() {
 
   const progressPercent = Math.round(((currentQuestionIndex + 1) / totalQuestions) * 100);
 
-  const optionLetters = ['A', 'B', 'C', 'D', 'E', 'F'];
+  const optionLetters = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L'];
 
   return (
     <div className="max-w-3xl mx-auto px-3 sm:px-6 py-6 pb-20 space-y-5">
@@ -140,9 +264,15 @@ export function QuizView() {
         
         {/* Question Shelf Tools */}
         <div className="flex items-center justify-between text-xs text-muted-foreground border-b border-border/50 pb-2.5">
-          <Badge variant="outline" className="font-mono text-[10px] py-0 px-1.5">
-            Q{currentQuestionIndex + 1}
-          </Badge>
+          <div className="flex items-center gap-2">
+            <Badge variant="outline" className="font-mono text-[10px] py-0 px-1.5">
+              Q{currentQuestionIndex + 1}
+            </Badge>
+            <span className="hidden sm:inline-flex items-center gap-1.5 text-[11px] text-muted-foreground/80 font-mono">
+              <Keyboard className="w-3 h-3 text-primary" />
+              <span>Keys 1–{Math.min(9, currentQuestion.options.length)} • Enter/Space • Arrows</span>
+            </span>
+          </div>
 
           <div className="flex items-center gap-1.5">
             {/* Note Button */}
@@ -212,9 +342,10 @@ export function QuizView() {
                 disabled={isInstantMode && isChecked}
                 onClick={() => selectAnswer(currentQuestionIndex, optIdx)}
                 className={cn(
-                  'w-full text-left p-3 rounded-md border text-xs sm:text-sm flex items-start gap-3 transition-colors',
+                  'group w-full text-left p-3 rounded-md border text-xs sm:text-sm flex items-start gap-3 transition-colors',
                   optionStyle
                 )}
+                title={optIdx < 9 ? `Option ${optionLetters[optIdx] || optIdx + 1} (Press ${optIdx + 1} on keyboard)` : undefined}
               >
                 <div
                   className={cn(
@@ -228,6 +359,21 @@ export function QuizView() {
                 <div className="flex-1 pt-0.5 leading-snug">
                   <MarkdownRenderer content={option} inline />
                 </div>
+
+                {/* Keyboard shortcut hint for keys 1-9 */}
+                {optIdx < 9 && !(isInstantMode && isChecked) && (
+                  <span
+                    className={cn(
+                      'hidden sm:inline-flex items-center justify-center font-mono text-[10px] px-1.5 py-0.5 rounded border shrink-0 select-none transition-colors opacity-60 group-hover:opacity-100',
+                      isSelected
+                        ? 'border-primary/40 bg-primary/20 text-primary font-bold'
+                        : 'border-border/60 bg-muted/40 text-muted-foreground'
+                    )}
+                    title={`Press key ${optIdx + 1} to select`}
+                  >
+                    [{optIdx + 1}]
+                  </span>
+                )}
 
                 {isInstantMode && isChecked && (
                   <div className="shrink-0 pt-0.5">
@@ -275,9 +421,11 @@ export function QuizView() {
             disabled={currentQuestionIndex === 0}
             onClick={prevQuestion}
             className="h-8 text-xs gap-1 border-border/70"
+            title="Previous Question (or press ← Left Arrow)"
           >
             <ChevronLeft className="w-3.5 h-3.5" />
             <span>Previous</span>
+            <kbd className="hidden sm:inline-block font-mono text-[10px] opacity-60 ml-0.5">←</kbd>
           </Button>
 
           <div className="flex items-center gap-2">
@@ -287,10 +435,14 @@ export function QuizView() {
                 variant="secondary"
                 size="sm"
                 onClick={() => checkAnswer(currentQuestionIndex)}
-                className="h-8 text-xs font-medium gap-1"
+                className="h-8 text-xs font-medium gap-1.5"
+                title="Check Answer (or press Enter / Space)"
               >
                 <Check className="w-3.5 h-3.5" />
                 <span>Check Answer</span>
+                <kbd className="hidden sm:inline-block font-mono text-[10px] bg-background/80 px-1 py-0.2 rounded border border-border/60 text-muted-foreground">
+                  Enter / Space
+                </kbd>
               </Button>
             )}
 
@@ -299,22 +451,50 @@ export function QuizView() {
               <Button
                 size="sm"
                 onClick={nextQuestion}
-                className="h-8 text-xs font-medium gap-1 bg-primary text-primary-foreground"
+                className="h-8 text-xs font-medium gap-1.5 bg-primary text-primary-foreground"
+                title="Next Question (or press Enter / Space / → Right Arrow)"
               >
                 <span>Next</span>
                 <ChevronRight className="w-3.5 h-3.5" />
+                <kbd className="hidden sm:inline-block font-mono text-[10px] bg-primary-foreground/20 text-primary-foreground px-1 py-0.2 rounded">
+                  Enter / Space
+                </kbd>
               </Button>
             ) : (
               <Button
                 size="sm"
                 onClick={finishQuiz}
                 className="h-8 text-xs font-semibold gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white px-4"
+                title="Finish Exam (or press Enter / Space)"
               >
                 <span>Finish Quiz</span>
                 <Send className="w-3.5 h-3.5" />
+                <kbd className="hidden sm:inline-block font-mono text-[10px] bg-white/20 text-white px-1 py-0.2 rounded">
+                  Enter / Space
+                </kbd>
               </Button>
             )}
           </div>
+        </div>
+      </div>
+
+      {/* Keyboard Controls Helper Banner */}
+      <div className="rounded-lg border border-border/50 bg-muted/20 px-3.5 py-2 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-[11px] text-muted-foreground select-none">
+        <div className="flex items-center gap-2">
+          <Keyboard className="w-3.5 h-3.5 text-primary shrink-0" />
+          <span className="font-semibold text-foreground/90">Keyboard Controls:</span>
+          <span>
+            Press <kbd className="px-1.5 py-0.5 rounded border border-border/70 bg-background font-mono text-[10px] text-foreground">1</kbd>–<kbd className="px-1.5 py-0.5 rounded border border-border/70 bg-background font-mono text-[10px] text-foreground">{Math.min(9, currentQuestion.options.length)}</kbd> to select option
+          </span>
+        </div>
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-muted-foreground/90">
+          <span>
+            <kbd className="px-1.5 py-0.5 rounded border border-border/70 bg-background font-mono text-[10px] text-foreground">Enter</kbd> / <kbd className="px-1.5 py-0.5 rounded border border-border/70 bg-background font-mono text-[10px] text-foreground">Space</kbd> {isInstantMode && !isChecked ? 'Check Answer' : 'Next / Finish'}
+          </span>
+          <span>•</span>
+          <span>
+            <kbd className="px-1.5 py-0.5 rounded border border-border/70 bg-background font-mono text-[10px] text-foreground">←</kbd> <kbd className="px-1.5 py-0.5 rounded border border-border/70 bg-background font-mono text-[10px] text-foreground">→</kbd> Navigate questions
+          </span>
         </div>
       </div>
 
