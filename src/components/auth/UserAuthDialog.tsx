@@ -45,7 +45,6 @@ const STORAGE_API_KEY = 'mcqhub_gemini_api_key';
 export function UserAuthDialog({ open, onOpenChange, defaultTab = 'auth' }: UserAuthDialogProps) {
   const {
     user,
-    activeSession,
     isAuthLoading,
     login,
     register,
@@ -92,7 +91,7 @@ export function UserAuthDialog({ open, onOpenChange, defaultTab = 'auth' }: User
       const list = await getUserSessionsFirestore(uname);
       setSessionList(list);
     } catch {
-      if (activeSession) setSessionList([activeSession]);
+      setSessionList([]);
     } finally {
       setIsLoadingSessions(false);
     }
@@ -132,7 +131,7 @@ export function UserAuthDialog({ open, onOpenChange, defaultTab = 'auth' }: User
       localStorage.setItem(STORAGE_API_KEY, trimmed);
       setSavedApiKey(trimmed);
       addToast('Custom Google Gemini API key saved', 'success');
-    } catch (err: any) {
+    } catch {
       addToast('Failed to save API key to local storage', 'error');
     }
   };
@@ -148,48 +147,54 @@ export function UserAuthDialog({ open, onOpenChange, defaultTab = 'auth' }: User
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg bg-card border-border text-foreground p-0 overflow-hidden shadow-2xl">
-        <DialogHeader className="px-5 pt-5 pb-3 border-b border-border/60 bg-muted/20">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded bg-primary/10 border border-primary/20 flex items-center justify-center text-primary">
-                {activeTab === 'settings' ? <Settings className="w-4 h-4" /> : <User className="w-4 h-4" />}
-              </div>
-              <div>
-                <DialogTitle className="text-base font-semibold tracking-tight">
-                  {user ? 'Account & Settings' : 'Sign In & Settings'}
-                </DialogTitle>
-                <DialogDescription className="text-xs text-muted-foreground">
-                  Manage your account, cloud sync, and application preferences
-                </DialogDescription>
-              </div>
+      <DialogContent className="w-[calc(100vw-1.5rem)] max-w-md sm:max-w-lg max-h-[90vh] bg-card border-border text-foreground p-0 rounded-xl shadow-2xl flex flex-col overflow-hidden my-auto">
+        
+        {/* Header - Fixed with right padding to clear close button */}
+        <DialogHeader className="px-4 sm:px-5 pt-4 pb-3 pr-12 border-b border-border/60 bg-muted/20 shrink-0">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shrink-0">
+              {activeTab === 'settings' ? <Settings className="w-4 h-4" /> : <User className="w-4 h-4" />}
+            </div>
+            <div className="min-w-0">
+              <DialogTitle className="text-sm sm:text-base font-semibold tracking-tight truncate">
+                {user ? 'Account & Settings' : 'Sign In & Settings'}
+              </DialogTitle>
+              <DialogDescription className="text-[11px] sm:text-xs text-muted-foreground truncate">
+                {activeTab === 'settings' ? 'Configure personal API keys & cloud sync' : 'Sync your quizzes and history across devices'}
+              </DialogDescription>
             </div>
           </div>
         </DialogHeader>
 
-        <div className="p-5">
+        {/* Tab Controls - Fixed under header */}
+        <div className="px-4 sm:px-5 pt-3 pb-1 shrink-0">
           <Tabs value={activeTab} onValueChange={(val: any) => setActiveTab(val)} className="w-full">
-            <TabsList className="grid grid-cols-3 mb-4 bg-muted/40 p-1 text-xs">
-              <TabsTrigger value="auth" className="gap-1.5 text-xs py-1.5">
-                <User className="w-3.5 h-3.5" />
-                <span>{user ? 'Account' : 'Sign In'}</span>
+            <TabsList className="grid grid-cols-3 bg-muted/40 p-1 text-xs rounded-lg">
+              <TabsTrigger value="auth" className="gap-1 sm:gap-1.5 text-[11px] sm:text-xs py-1.5 px-1 truncate">
+                <User className="w-3.5 h-3.5 shrink-0" />
+                <span className="truncate">{user ? 'Account' : 'Sign In'}</span>
               </TabsTrigger>
-              <TabsTrigger value="settings" className="gap-1.5 text-xs py-1.5">
-                <Settings className="w-3.5 h-3.5" />
-                <span>Settings</span>
+              <TabsTrigger value="settings" className="gap-1 sm:gap-1.5 text-[11px] sm:text-xs py-1.5 px-1 truncate">
+                <Settings className="w-3.5 h-3.5 shrink-0" />
+                <span className="truncate">Settings</span>
               </TabsTrigger>
-              <TabsTrigger value="sessions" className="gap-1.5 text-xs py-1.5" disabled={!user}>
-                <History className="w-3.5 h-3.5" />
-                <span>Devices</span>
+              <TabsTrigger value="sessions" className="gap-1 sm:gap-1.5 text-[11px] sm:text-xs py-1.5 px-1 truncate" disabled={!user}>
+                <History className="w-3.5 h-3.5 shrink-0" />
+                <span className="truncate">Devices</span>
               </TabsTrigger>
             </TabsList>
+          </Tabs>
+        </div>
 
+        {/* Scrollable Tab Content Container */}
+        <div className="overflow-y-auto overscroll-contain flex-1 px-4 sm:px-5 py-3 space-y-4">
+          <Tabs value={activeTab} onValueChange={(val: any) => setActiveTab(val)} className="w-full">
             {/* TAB 1: AUTHENTICATION / ACCOUNT */}
-            <TabsContent value="auth" className="space-y-4 focus-visible:outline-none">
+            <TabsContent value="auth" className="space-y-4 focus-visible:outline-none m-0">
               {!user ? (
-                <div>
-                  <div className="flex items-center justify-between mb-3 border-b border-border/40 pb-2">
-                    <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between border-b border-border/40 pb-2">
+                    <span className="text-xs font-medium text-muted-foreground">
                       {authMode === 'login' ? 'Existing Account' : 'Create Free Account'}
                     </span>
                     <div className="flex gap-1">
@@ -223,7 +228,7 @@ export function UserAuthDialog({ open, onOpenChange, defaultTab = 'auth' }: User
                         value={username}
                         onChange={(e) => setUsername(e.target.value)}
                         required
-                        className="h-8 text-xs font-mono bg-background"
+                        className="h-9 sm:h-8 text-xs bg-background"
                       />
                     </div>
 
@@ -235,7 +240,7 @@ export function UserAuthDialog({ open, onOpenChange, defaultTab = 'auth' }: User
                           placeholder="e.g. Alex"
                           value={displayName}
                           onChange={(e) => setDisplayName(e.target.value)}
-                          className="h-8 text-xs bg-background"
+                          className="h-9 sm:h-8 text-xs bg-background"
                         />
                       </div>
                     )}
@@ -248,11 +253,11 @@ export function UserAuthDialog({ open, onOpenChange, defaultTab = 'auth' }: User
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                         required
-                        className="h-8 text-xs font-mono bg-background"
+                        className="h-9 sm:h-8 text-xs bg-background"
                       />
                     </div>
 
-                    <div className="pt-2 flex items-center justify-between">
+                    <div className="pt-2 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                       <span className="text-[11px] text-muted-foreground">
                         Syncs quizzes seamlessly across devices.
                       </span>
@@ -260,7 +265,7 @@ export function UserAuthDialog({ open, onOpenChange, defaultTab = 'auth' }: User
                         type="submit"
                         size="sm"
                         disabled={isAuthLoading}
-                        className="h-8 text-xs px-4 bg-primary text-primary-foreground font-medium"
+                        className="h-8 text-xs px-4 bg-primary text-primary-foreground font-medium shrink-0"
                       >
                         {isAuthLoading ? (
                           <RefreshCw className="w-3.5 h-3.5 animate-spin mr-1.5" />
@@ -333,7 +338,7 @@ export function UserAuthDialog({ open, onOpenChange, defaultTab = 'auth' }: User
             </TabsContent>
 
             {/* TAB 2: SETTINGS (API KEY & PREFERENCES) */}
-            <TabsContent value="settings" className="space-y-4 focus-visible:outline-none">
+            <TabsContent value="settings" className="space-y-4 focus-visible:outline-none m-0">
               <div className="p-3.5 rounded-lg border border-border/80 bg-muted/20 space-y-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
@@ -343,20 +348,20 @@ export function UserAuthDialog({ open, onOpenChange, defaultTab = 'auth' }: User
                   {savedApiKey ? (
                     <Badge variant="outline" className="text-[11px] text-emerald-500 border-emerald-500/30 gap-1">
                       <CheckCircle2 className="w-3 h-3" />
-                      Using Custom Key
+                      Custom Key
                     </Badge>
                   ) : (
                     <Badge variant="outline" className="text-[11px] text-muted-foreground border-border">
-                      Default Engine Active
+                      Default Engine
                     </Badge>
                   )}
                 </div>
 
                 <p className="text-xs text-muted-foreground leading-relaxed">
-                  MCQHub includes free built-in question generation. If you prefer to use your personal Google Gemini API key for higher rate limits, you can enter it below.
+                  MCQHub includes free built-in generation. If you prefer using your personal Google Gemini API key with higher limits, add it below:
                 </p>
 
-                <div className="space-y-2 pt-1">
+                <div className="space-y-1.5 pt-1">
                   <Label className="text-xs font-medium">Google Gemini API Key</Label>
                   <div className="relative">
                     <Input
@@ -364,7 +369,7 @@ export function UserAuthDialog({ open, onOpenChange, defaultTab = 'auth' }: User
                       placeholder="AIzaSy..."
                       value={apiKeyInput}
                       onChange={(e) => setApiKeyInput(e.target.value)}
-                      className="h-8 text-xs font-mono pr-8 bg-background"
+                      className="h-9 sm:h-8 text-xs font-mono pr-8 bg-background"
                     />
                     <button
                       type="button"
@@ -376,7 +381,7 @@ export function UserAuthDialog({ open, onOpenChange, defaultTab = 'auth' }: User
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between pt-1">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pt-1">
                   <a
                     href="https://aistudio.google.com/apikey"
                     target="_blank"
@@ -387,7 +392,7 @@ export function UserAuthDialog({ open, onOpenChange, defaultTab = 'auth' }: User
                     <ExternalLink className="w-3 h-3" />
                   </a>
 
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 self-end sm:self-auto">
                     {savedApiKey && (
                       <Button
                         type="button"
@@ -452,10 +457,10 @@ export function UserAuthDialog({ open, onOpenChange, defaultTab = 'auth' }: User
             </TabsContent>
 
             {/* TAB 3: SESSIONS */}
-            <TabsContent value="sessions" className="space-y-3 focus-visible:outline-none">
+            <TabsContent value="sessions" className="space-y-3 focus-visible:outline-none m-0">
               <div className="flex items-center justify-between">
                 <span className="text-xs text-muted-foreground">
-                  Active login sessions associated with your account:
+                  Active login sessions:
                 </span>
                 <Button
                   variant="ghost"
@@ -485,7 +490,7 @@ export function UserAuthDialog({ open, onOpenChange, defaultTab = 'auth' }: User
                       className="p-2.5 rounded border border-border/60 bg-muted/20 text-xs space-y-1"
                     >
                       <div className="flex items-center justify-between">
-                        <span className="text-[11px] font-mono text-primary truncate max-w-[200px]">
+                        <span className="text-[11px] font-mono text-primary truncate max-w-[180px]">
                           {s.tokenId}
                         </span>
                         <Badge
@@ -500,8 +505,8 @@ export function UserAuthDialog({ open, onOpenChange, defaultTab = 'auth' }: User
                         </Badge>
                       </div>
                       <div className="text-[11px] text-muted-foreground flex justify-between">
-                        <span>{new Date(s.timestamp).toLocaleString()}</span>
-                        <span className="truncate max-w-[150px] text-[10px]">{s.userAgent}</span>
+                        <span>{new Date(s.timestamp).toLocaleDateString()}</span>
+                        <span className="truncate max-w-[120px] text-[10px]">{s.userAgent}</span>
                       </div>
                     </div>
                   ))

@@ -119,6 +119,56 @@ export function HomeView() {
   return (
     <div className="max-w-3xl mx-auto px-3 sm:px-6 py-6 pb-20 space-y-6">
       
+      {/* Unsubmitted Active Test (Prominently displayed at the very beginning of the front panel) */}
+      {activeExamSession && (
+        <div className="rounded-xl border border-primary/40 bg-card p-4 sm:p-5 shadow-sm space-y-3 animate-in fade-in transition-all">
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+            <div className="space-y-1.5 min-w-0">
+              <div className="flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-primary animate-pulse shrink-0" />
+                <Badge className="bg-primary/15 text-primary border border-primary/30 text-[10px] px-2 py-0.5 font-medium">
+                  Unsubmitted Test
+                </Badge>
+                <span className="text-xs text-muted-foreground font-mono">
+                  Question {(activeExamSession.currentQuestionIndex || 0) + 1} of {activeExamSession.quiz.questions.length}
+                </span>
+              </div>
+              <h2 className="text-base sm:text-lg font-bold text-foreground leading-snug">
+                {activeExamSession.quiz.title}
+              </h2>
+              <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                <span>
+                  Answered <strong>{Object.keys(activeExamSession.userAnswers || {}).length}</strong> of {activeExamSession.quiz.questions.length} questions
+                </span>
+                <span>•</span>
+                <span>
+                  Progress: {Math.round((Object.keys(activeExamSession.userAnswers || {}).length / activeExamSession.quiz.questions.length) * 100)}%
+                </span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={discardActiveExam}
+                className="h-8 text-xs text-muted-foreground hover:text-rose-500 hover:border-rose-500/40"
+              >
+                Discard
+              </Button>
+              <Button
+                size="sm"
+                onClick={resumeActiveExam}
+                className="h-8 text-xs bg-primary text-primary-foreground font-semibold gap-1.5 px-4 shadow-sm"
+              >
+                <Play className="w-3.5 h-3.5 fill-current" />
+                <span>Resume Test</span>
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="border-b border-border/80 pb-4">
         <div className="flex items-center gap-2 mb-1">
@@ -138,46 +188,6 @@ export function HomeView() {
           Generate multiple-choice practice questions on any topic in seconds. Formatted with math equations and diagrams.
         </p>
       </div>
-
-      {/* Cross-Device Live Resume Banner */}
-      {activeExamSession && (
-        <div className="rounded-lg border border-primary/40 bg-primary/10 p-4 space-y-2 shadow-xs transition-all">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-            <div className="space-y-1">
-              <div className="flex items-center gap-2">
-                <Badge className="bg-primary text-primary-foreground text-[10px] px-1.5 py-0">
-                  Quiz In Progress
-                </Badge>
-                <span className="text-xs font-semibold text-foreground truncate max-w-[280px]">
-                  {activeExamSession.quiz.title}
-                </span>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Answered {Object.keys(activeExamSession.userAnswers || {}).length} of {activeExamSession.quiz.questions.length} questions • Left off at Question {(activeExamSession.currentQuestionIndex || 0) + 1}
-              </p>
-            </div>
-
-            <div className="flex items-center gap-2 shrink-0">
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={discardActiveExam}
-                className="h-8 text-xs text-muted-foreground hover:text-rose-500 hover:bg-rose-500/10"
-              >
-                Discard
-              </Button>
-              <Button
-                size="sm"
-                onClick={resumeActiveExam}
-                className="h-8 text-xs bg-primary text-primary-foreground font-semibold gap-1.5 px-3.5"
-              >
-                <Play className="w-3.5 h-3.5 fill-current" />
-                <span>Resume Quiz</span>
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Main Generator Card */}
       <div className="rounded-lg border border-border bg-card shadow-xs overflow-hidden">

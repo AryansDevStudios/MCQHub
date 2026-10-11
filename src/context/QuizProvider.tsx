@@ -848,6 +848,11 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
 
     // Clear active in-progress exam from cloud and device!
     persistActiveExam(null);
+    setActiveQuiz(null);
+    setUserAnswers({});
+    setCheckedQuestions({});
+    setQuestionNotes({});
+    setCurrentQuestionIndex(0);
 
     // If user is logged in, sync attempt to Firestore in background
     if (user && typeof navigator !== 'undefined' && navigator.onLine) {
@@ -855,7 +860,7 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
     }
 
     setViewState('results');
-    addToast(`Exam completed! Score: ${score}/${activeQuiz.questions.length}`, 'success');
+    addToast(`Exam completed! Score: ${score}/${attempt.total}`, 'success');
   };
 
   const retryQuiz = () => {
