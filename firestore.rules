@@ -1,0 +1,30 @@
+rules_version = '2';
+
+// Cloud Firestore Security Rules for MCQHub
+// Database hierarchy:
+// - /system/heuristic : ping / latency / status check
+// - /users/{username} : user account credentials, sessions history, quizzes, and past exam attempts
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // 1. System diagnostics and heuristic check
+    match /system/{document=**} {
+      allow read, write: if true;
+    }
+
+    // 2. User Data Collections
+    // Development / Test mode (wildcard access):
+    match /users/{username} {
+      allow read, write: if true;
+    }
+    match /users/{username}/{subcollection=**} {
+      allow read, write: if true;
+    }
+
+    // Fallback wildcard for any additional collection:
+    match /{document=**} {
+      allow read, write: if true;
+    }
+  }
+}

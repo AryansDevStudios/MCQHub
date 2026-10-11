@@ -1,0 +1,9 @@
+name = "mcqhub"
+main = "src/index.ts"
+compatibility_date = "2024-09-23"
+account_id = "84bc7812b41cd68e12e1b3592c0371b7"
+
+[vars]
+GEMINI_MODEL = "gemini-3.5-flash-lite"
+FIREBASE_PROJECT_ID = "mcqhub-724e3"
+FIREBASE_API_KEY = "AIzaSyATzfV9pFDedahaiCwjrbELK9r21jKQ2As"

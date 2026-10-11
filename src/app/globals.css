@@ -1,0 +1,115 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 210 20% 98%;
+    --foreground: 222 47% 11%;
+    
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+    
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+    
+    --primary: 199 89% 42%;
+    --primary-foreground: 0 0% 100%;
+    
+    --secondary: 210 20% 94%;
+    --secondary-foreground: 222 47% 11%;
+    
+    --muted: 210 20% 94%;
+    --muted-foreground: 215 16% 47%;
+    
+    --accent: 210 20% 92%;
+    --accent-foreground: 222 47% 11%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 98%;
+    
+    --border: 214 20% 88%;
+    --input: 214 20% 88%;
+    --ring: 199 89% 42%;
+    
+    --radius: 0.375rem;
+
+    --chart-1: 152 69% 40%;
+    --chart-2: 0 72% 51%;
+    --chart-3: 38 92% 50%;
+    --chart-4: 199 89% 48%;
+    --chart-5: 262 83% 58%;
+  }
+
+  .dark {
+    --background: 224 25% 6%;
+    --foreground: 210 20% 96%;
+    
+    --card: 224 22% 9%;
+    --card-foreground: 210 20% 96%;
+    
+    --popover: 224 22% 9%;
+    --popover-foreground: 210 20% 96%;
+    
+    --primary: 199 89% 48%;
+    --primary-foreground: 224 25% 6%;
+    
+    --secondary: 224 16% 14%;
+    --secondary-foreground: 210 20% 96%;
+    
+    --muted: 224 16% 13%;
+    --muted-foreground: 215 16% 62%;
+    
+    --accent: 224 16% 16%;
+    --accent-foreground: 210 20% 96%;
+
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 210 20% 96%;
+    
+    --border: 224 16% 18%;
+    --input: 224 16% 18%;
+    --ring: 199 89% 48%;
+
+    --chart-1: 152 69% 45%;
+    --chart-2: 0 72% 55%;
+    --chart-3: 38 92% 50%;
+    --chart-4: 199 89% 55%;
+    --chart-5: 262 83% 65%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground antialiased selection:bg-primary/20 selection:text-primary;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+
+  /* Custom Editor Scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: hsl(var(--muted-foreground) / 0.25);
+    border-radius: 3px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--muted-foreground) / 0.45);
+  }
+
+  /* Compact number inputs */
+  input[type=number]::-webkit-inner-spin-button,
+  input[type=number]::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  input[type=number] {
+    -moz-appearance: textfield;
+  }
+}
