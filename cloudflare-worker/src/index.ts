@@ -477,23 +477,33 @@ Respond strictly in JSON matching this schema:
         const body = (await request.json()) as any;
         const { quizTitle, score, total, questions, userAnswers } = body;
 
-        const prompt = `You are an academic mentor. Summarize the user's exam performance:
-Quiz Title: ${quizTitle}
-Score: ${score}/${total} (${Math.round((score / total) * 100)}%)
-Questions: ${JSON.stringify(questions)}
-User Selected Answers: ${JSON.stringify(userAnswers)}
+        const prompt = `You are a helpful, neutral academic tutor and study advisor.
+Analyze the user's performance on the quiz: "${quizTitle}".
+${score !== undefined && total ? `Score: ${score}/${total} (${Math.round((score / total) * 100)}%).` : ''}
 
-Provide a concise diagnostic analysis with:
-1. Performance evaluation
-2. Specific concept strengths
-3. Specific concept weaknesses
-4. Practical study advice
+Questions and user answers:
+${JSON.stringify(
+  Array.isArray(questions)
+    ? questions.map((q: any, i: number) => ({
+        questionNumber: i + 1,
+        question: q.question,
+        correctOption: q.options ? q.options[q.correctAnswer] : q.correctAnswer,
+        userAnswer: userAnswers && userAnswers[i] !== undefined && q.options ? q.options[userAnswers[i]] : (userAnswers && userAnswers[i] !== undefined ? userAnswers[i] : 'Skipped'),
+        isCorrect: userAnswers ? userAnswers[i] === q.correctAnswer : undefined,
+      }))
+    : questions
+)}
 
-Respond strictly in JSON:
-{
-  "summary": "string markdown with encouraging review and key insights",
-  "recommendations": ["string", "string", "string"]
-}`;
+Guidelines:
+1. Tone: Maintain a balanced, neutral, and relaxed tone (not strict, harsh, or overly critical). Analyze the results objectively and constructively.
+2. Markdown & LaTeX: Write in structured Markdown with headers and bullet points. Use LaTeX notation for ALL mathematical formulas, variables, and scientific equations (e.g., inline \`$E = mc^2$\`, \`$\\lambda$\`, \`$\\Delta x$\`, or display \`$$\\frac{a}{b}$$\`). Ensure mathematical symbols and expressions render cleanly in LaTeX.
+3. Structure:
+   - ### Overview: A neutral, factual summary of the performance.
+   - ### Strengths: Concepts and problems handled successfully.
+   - ### Concepts to Review: Objective review of any mistakes, explaining the underlying principles with LaTeX formulas where helpful.
+   - ### Study Recommendations: 2-3 straightforward suggestions for further practice.
+
+Respond directly in clean Markdown.`;
 
         const model = env.GEMINI_MODEL || 'gemini-3.5-flash-lite';
         const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
@@ -504,7 +514,6 @@ Respond strictly in JSON:
           body: JSON.stringify({
             contents: [{ parts: [{ text: prompt }] }],
             generationConfig: {
-              responseMimeType: 'application/json',
               temperature: 0.7,
             },
           }),
@@ -516,10 +525,9 @@ Respond strictly in JSON:
         }
 
         const geminiData: any = await geminiRes.json();
-        const responseText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text;
-        const parsedSummary = JSON.parse(responseText);
+        const responseText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || '';
 
-        return jsonResponse({ success: true, data: parsedSummary });
+        return jsonResponse({ success: true, data: responseText });
       }
 
       // 10. MCP (Model Context Protocol) Endpoint (JSON-RPC 2.0)

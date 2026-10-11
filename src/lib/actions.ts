@@ -155,12 +155,33 @@ export async function summarizeQuizResultsAction(input: SummarizeQuizResultsInpu
   // 2. Direct client fallback
   if (activeKey) {
     try {
-      const prompt = `You are an academic mentor. Summarize the user's exam performance:
-Quiz Title: ${input.quizTitle}
-Questions: ${JSON.stringify(input.questions)}
-User Selected Answers: ${JSON.stringify(input.userAnswers)}
+      const prompt = `You are a helpful, neutral academic tutor and study advisor.
+Analyze the user's performance on the quiz: "${input.quizTitle}".
+${(input as any).score !== undefined && (input as any).total ? `Score: ${(input as any).score}/${(input as any).total}.` : ''}
 
-Provide a concise diagnostic analysis in neat bulleted markdown.`;
+Questions and user answers:
+${JSON.stringify(
+  Array.isArray(input.questions)
+    ? input.questions.map((q: any, i: number) => ({
+        questionNumber: i + 1,
+        question: q.question,
+        correctOption: q.options ? q.options[q.correctAnswer] : q.correctAnswer,
+        userAnswer: input.userAnswers && input.userAnswers[i] !== undefined && q.options ? q.options[input.userAnswers[i]] : (input.userAnswers && input.userAnswers[i] !== undefined ? input.userAnswers[i] : 'Skipped'),
+        isCorrect: input.userAnswers ? input.userAnswers[i] === q.correctAnswer : undefined,
+      }))
+    : input.questions
+)}
+
+Guidelines:
+1. Tone: Maintain a balanced, neutral, and relaxed tone (not strict, harsh, or overly critical). Analyze the results objectively and constructively.
+2. Markdown & LaTeX: Write in structured Markdown with headers and bullet points. Use LaTeX notation for ALL mathematical formulas, variables, and scientific equations (e.g., inline \`$E = mc^2$\`, \`$\\lambda$\`, \`$\\Delta x$\`, or display \`$$\\frac{a}{b}$$\`). Ensure mathematical symbols and expressions render cleanly in LaTeX.
+3. Structure:
+   - ### Overview: A neutral, factual summary of the performance.
+   - ### Strengths: Concepts and problems handled successfully.
+   - ### Concepts to Review: Objective review of any mistakes, explaining the underlying principles with LaTeX formulas where helpful.
+   - ### Study Recommendations: 2-3 straightforward suggestions for further practice.
+
+Respond directly in clean Markdown.`;
 
       const res = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=${activeKey}`,

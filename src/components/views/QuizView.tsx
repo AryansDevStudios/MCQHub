@@ -216,7 +216,7 @@ export function QuizView() {
                 </div>
 
                 <div className="flex-1 pt-0.5 leading-snug">
-                  <MarkdownRenderer content={option} />
+                  <MarkdownRenderer content={option} inline />
                 </div>
 
                 {isInstantMode && isChecked && (

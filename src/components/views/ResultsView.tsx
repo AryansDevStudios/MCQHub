@@ -89,6 +89,8 @@ export function ResultsView() {
 
       const res = await summarizeQuizResultsAction({
         quizTitle: currentQuiz.title,
+        score: correctCount,
+        total: totalCount,
         questions: currentQuiz.questions.map((q) => ({
           question: q.question,
           correctAnswer: q.correctAnswer,
@@ -329,7 +331,7 @@ export function ResultsView() {
                     <div className="text-[10px] text-muted-foreground uppercase font-medium">Your Choice:</div>
                     <div className="mt-0.5">
                       {userChoice !== undefined ? (
-                        <MarkdownRenderer content={q.options[userChoice]} />
+                        <MarkdownRenderer content={q.options[userChoice]} inline />
                       ) : (
                         <span className="italic text-muted-foreground">Skipped</span>
                       )}
@@ -340,7 +342,7 @@ export function ResultsView() {
                     <div className="p-2.5 rounded bg-emerald-500/10 border border-emerald-500/30 text-foreground">
                       <div className="text-[10px] text-emerald-600 dark:text-emerald-400 uppercase font-medium">Correct Answer:</div>
                       <div className="mt-0.5">
-                        <MarkdownRenderer content={q.options[q.correctAnswer]} />
+                        <MarkdownRenderer content={q.options[q.correctAnswer]} inline />
                       </div>
                     </div>
                   )}
