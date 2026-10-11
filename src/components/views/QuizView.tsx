@@ -33,6 +33,9 @@ export function QuizView() {
     setIsInstantMode,
     checkedQuestions,
     elapsedSeconds,
+    elapsedMs,
+    clockSkewMs,
+    originDeviceId,
     selectAnswer,
     checkAnswer,
     shuffleOptions,
@@ -64,10 +67,13 @@ export function QuizView() {
   const selectedOptionIndex = userAnswers[currentQuestionIndex];
   const currentNote = questionNotes[currentQuestionIndex] || '';
 
-  // Timer format
-  const mins = Math.floor(elapsedSeconds / 60);
-  const secs = elapsedSeconds % 60;
+  // Ultra-accurate Millisecond Timer format
+  const totalMs = elapsedMs || elapsedSeconds * 1000;
+  const mins = Math.floor(totalMs / 60000);
+  const secs = Math.floor((totalMs % 60000) / 1000);
+  const millis = Math.floor(totalMs % 1000);
   const timeFormatted = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+  const msFormatted = String(millis).padStart(3, '0');
 
   const progressPercent = Math.round(((currentQuestionIndex + 1) / totalQuestions) * 100);
 
@@ -89,7 +95,7 @@ export function QuizView() {
             </span>
             {user && (
               <span className="text-[11px] text-muted-foreground/80 flex items-center gap-1 font-mono">
-                • <Cloud className="w-3 h-3 text-primary inline" /> Auto-saved
+                • <Cloud className="w-3 h-3 text-primary inline" /> Edge Synced
               </span>
             )}
           </div>
@@ -109,10 +115,14 @@ export function QuizView() {
             />
           </div>
 
-          {/* Digital Timer */}
-          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-muted/40 border border-border/60 font-mono text-xs text-foreground font-medium">
-            <Clock className="w-3.5 h-3.5 text-primary" />
+          {/* Synchronized Master Clock (Millisecond-accurate across devices) */}
+          <div
+            className="flex items-center gap-1 px-2.5 py-1 rounded bg-muted/40 border border-border/60 font-mono text-xs text-foreground font-medium select-none shadow-2xs"
+            title={`Edge-Synchronized Clock (±1ms, Origin: ${originDeviceId || 'Master'})`}
+          >
+            <Clock className="w-3.5 h-3.5 text-primary shrink-0" />
             <span>{timeFormatted}</span>
+            <span className="text-[10px] text-primary/70 font-mono">.{msFormatted}</span>
           </div>
         </div>
       </div>

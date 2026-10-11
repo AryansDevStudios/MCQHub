@@ -372,8 +372,9 @@ export default {
         return jsonResponse({ success: true, count: Array.isArray(history) ? history.length : 0 });
       }
 
-      // 7b. User Data: Active Exam Sync (Cross-Device Live State)
+      // 7b. User Data: Active Exam Sync (Cross-Device Live State with Millisecond Time Sync)
       if (url.pathname === '/api/user/active-exam') {
+        const serverTimeMs = Date.now();
         if (request.method === 'POST') {
           const body = (await request.json()) as any;
           const { username, activeExam } = body;
@@ -382,14 +383,18 @@ export default {
             return jsonResponse({ success: false, error: 'Username required' }, 400);
           }
 
+          const examToSave = activeExam
+            ? { ...activeExam, serverAnchorTimeMs: serverTimeMs }
+            : null;
+
           await patchFirestoreDoc(
             env,
             `users/${cleanUser}`,
-            { activeExam: activeExam ? activeExam : null },
+            { activeExam: examToSave },
             ['activeExam']
           );
 
-          return jsonResponse({ success: true });
+          return jsonResponse({ success: true, serverTimeMs });
         }
 
         if (request.method === 'GET') {
@@ -408,8 +413,17 @@ export default {
           return jsonResponse({
             success: true,
             activeExam: userData.activeExam || null,
+            serverTimeMs,
           });
         }
+      }
+
+      // 7b-2. Dedicated Edge Atomic Time Endpoint for High-Precision SNTP Clock Calibration
+      if (url.pathname === '/api/time' && request.method === 'GET') {
+        return jsonResponse({
+          serverTimeMs: Date.now(),
+          iso: new Date().toISOString(),
+        });
       }
 
       // 7c. Share Quiz: Create Shareable Assessment in Firestore

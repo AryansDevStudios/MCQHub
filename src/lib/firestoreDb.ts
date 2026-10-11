@@ -332,22 +332,53 @@ export async function saveActiveExamFirestore(
 }
 
 /**
- * Fetch active in-progress exam from Cloud Firestore
+ * Fetch Edge Server Atomic Time and calculate client clock skew (SNTP synchronization)
  */
-export async function fetchActiveExamFirestore(username: string): Promise<ActiveExamSession | null> {
+export async function fetchServerTime(): Promise<{ serverTimeMs: number; clientSkewMs: number } | null> {
+  const t0 = Date.now();
+  try {
+    const res = await fetch(`${CF_WORKER_URL}/api/time`);
+    const t1 = Date.now();
+    if (res.ok) {
+      const data = await res.json();
+      if (data.serverTimeMs) {
+        const rtt = t1 - t0;
+        const skew = data.serverTimeMs - (t0 + rtt / 2);
+        return { serverTimeMs: data.serverTimeMs, clientSkewMs: skew };
+      }
+    }
+  } catch {}
+  return null;
+}
+
+/**
+ * Fetch active in-progress exam from Cloud Firestore with edge server timestamp
+ */
+export async function fetchActiveExamFirestore(
+  username: string
+): Promise<{ activeExam: ActiveExamSession | null; serverTimeMs?: number; clientSkewMs?: number }> {
   const cleanUser = sanitizeUsername(username);
+  const t0 = Date.now();
   try {
     const res = await fetch(`${CF_WORKER_URL}/api/user/active-exam?username=${encodeURIComponent(cleanUser)}`);
+    const t1 = Date.now();
     if (res.ok) {
       const data = await res.json();
       if (data.success) {
-        return data.activeExam || null;
+        const rtt = t1 - t0;
+        const serverTime = data.serverTimeMs || t1;
+        const skew = serverTime - (t0 + rtt / 2);
+        return {
+          activeExam: data.activeExam || null,
+          serverTimeMs: serverTime,
+          clientSkewMs: skew,
+        };
       }
     }
   } catch {}
 
   const backup = getLocalUserBackup(cleanUser);
-  return backup?.activeExam || null;
+  return { activeExam: backup?.activeExam || null };
 }
 
 /**

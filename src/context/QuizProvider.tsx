@@ -21,6 +21,7 @@ import {
   fetchUserDataFirestore,
   saveActiveExamFirestore,
   fetchActiveExamFirestore,
+  fetchServerTime,
 } from '@/lib/firestoreDb';
 import { createSharedQuizAction, getSharedQuizAction } from '@/lib/actions';
 
@@ -59,6 +60,9 @@ interface QuizContextType {
   setIsInstantMode: (val: boolean) => void;
   checkedQuestions: Record<number, boolean>;
   elapsedSeconds: number;
+  elapsedMs: number;
+  clockSkewMs: number;
+  originDeviceId: string | null;
   isTimerRunning: boolean;
 
   // Live Cross-Device Active Exam Sync
@@ -151,10 +155,28 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
   const [isInstantMode, setIsInstantMode] = useState<boolean>(false);
   const [checkedQuestions, setCheckedQuestions] = useState<Record<number, boolean>>({});
   const [elapsedSeconds, setElapsedSeconds] = useState<number>(0);
+  const [elapsedMs, setElapsedMs] = useState<number>(0);
+  const [clockSkewMs, setClockSkewMs] = useState<number>(0);
+  const [originDeviceId, setOriginDeviceId] = useState<string | null>(null);
   const [isTimerRunning, setIsTimerRunning] = useState<boolean>(false);
 
   // In-progress active exam session (persisted across devices)
   const [activeExamSession, setActiveExamSession] = useState<ActiveExamSession | null>(null);
+  const activeExamSessionRef = useRef<ActiveExamSession | null>(null);
+  activeExamSessionRef.current = activeExamSession;
+  const clockSkewRef = useRef<number>(0);
+
+  // Device unique identifier helper
+  const getOrCreateDeviceId = useCallback((): string => {
+    if (typeof window === 'undefined') return 'server';
+    let devId = localStorage.getItem('mcqhub_device_id');
+    if (!devId) {
+      const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
+      devId = `dev_${isMobile ? 'mobile' : 'laptop'}_${Math.random().toString(36).substring(2, 8)}`;
+      localStorage.setItem('mcqhub_device_id', devId);
+    }
+    return devId;
+  }, []);
 
   // JSON editor buffer
   const [editorJsonBuffer, setEditorJsonBuffer] = useState<string>('');
@@ -464,14 +486,24 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
     const pullActiveExam = async () => {
       if (!userRef.current || isSyncingExamRef.current) return;
       try {
-        const remote = await fetchActiveExamFirestore(userRef.current.username);
+        const res = await fetchActiveExamFirestore(userRef.current.username);
+        if (res.clientSkewMs !== undefined) {
+          clockSkewRef.current = res.clientSkewMs;
+          setClockSkewMs(res.clientSkewMs);
+        }
+
+        const remote = res.activeExam;
         if (!remote) {
           // If remote was finished or discarded on another device
-          if (activeExamSession && Date.now() - lastLocalUpdateRef.current > 4000) {
+          if (activeExamSessionRef.current && Date.now() - lastLocalUpdateRef.current > 4000) {
             setActiveExamSession(null);
+            activeExamSessionRef.current = null;
             if (activeQuiz) {
               setActiveQuiz(null);
               setIsTimerRunning(false);
+              setElapsedMs(0);
+              setElapsedSeconds(0);
+              setOriginDeviceId(null);
             }
             localStorage.removeItem(STORAGE_KEYS.ACTIVE_EXAM);
           }
@@ -479,9 +511,11 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
         }
 
         const remoteTime = new Date(remote.updatedAt).getTime();
-        // If remote is newer than our local interaction by > 200ms, sync into view!
+        // If remote was updated from another device (or on load), sync into view!
         if (remoteTime > lastLocalUpdateRef.current + 200) {
           setActiveExamSession(remote);
+          activeExamSessionRef.current = remote;
+          if (remote.originDeviceId) setOriginDeviceId(remote.originDeviceId);
           localStorage.setItem(STORAGE_KEYS.ACTIVE_EXAM, JSON.stringify(remote));
 
           // If the user has this quiz currently active on screen, live-update answers and progress!
@@ -503,7 +537,7 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
       clearInterval(interval);
       window.removeEventListener('focus', handleFocus);
     };
-  }, [user, activeQuiz, activeExamSession]);
+  }, [user, activeQuiz]);
 
   const runInitialHeuristic = async () => {
     setIsCheckingHeuristic(true);
@@ -543,20 +577,57 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  // Timer engine
+  // High-precision Millisecond Engine anchored to Origin Clock & Edge Master Clock
   useEffect(() => {
-    if (isTimerRunning) {
-      timerRef.current = setInterval(() => {
-        setElapsedSeconds((prev) => prev + 1);
-      }, 1000);
-    } else if (timerRef.current) {
-      clearInterval(timerRef.current);
-      timerRef.current = null;
+    if (!isTimerRunning) {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+      return;
     }
+
+    const tick = () => {
+      const currentSession = activeExamSessionRef.current;
+      if (!currentSession || !currentSession.isTimerRunning) return;
+
+      const nowEpoch = Date.now() + clockSkewRef.current;
+      const startedAt = currentSession.startedAtMs || nowEpoch;
+      const base = currentSession.baseElapsedMs || 0;
+      const totalElapsed = Math.max(0, (nowEpoch - startedAt) + base);
+
+      setElapsedMs(totalElapsed);
+      setElapsedSeconds(Math.floor(totalElapsed / 1000));
+    };
+
+    // Smooth 40ms interval (25 updates per second) for millisecond accuracy without browser throttling
+    timerRef.current = setInterval(tick, 40);
+    tick();
+
     return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
     };
   }, [isTimerRunning]);
+
+  // Periodic 10-Second Clock Calibration (Sync with Origin & Edge Master Clock)
+  useEffect(() => {
+    const calibrateClock = async () => {
+      try {
+        const timeRes = await fetchServerTime();
+        if (timeRes) {
+          clockSkewRef.current = timeRes.clientSkewMs;
+          setClockSkewMs(timeRes.clientSkewMs);
+        }
+      } catch {}
+    };
+
+    calibrateClock();
+    const calibInterval = setInterval(calibrateClock, 10000);
+    return () => clearInterval(calibInterval);
+  }, []);
 
   const toggleTheme = () => {
     const nextTheme = theme === 'dark' ? 'light' : 'dark';
@@ -656,16 +727,28 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
     setViewState('quiz');
 
     // Create and persist active exam session immediately
+    const devId = getOrCreateDeviceId();
+    const nowEpoch = Date.now() + clockSkewRef.current;
+
     const session: ActiveExamSession = {
       quiz: cloned,
       userAnswers: {},
       currentQuestionIndex: 0,
       elapsedSeconds: 0,
+      elapsedMs: 0,
+      startedAtMs: nowEpoch,
+      baseElapsedMs: 0,
+      originDeviceId: devId,
+      isTimerRunning: true,
       isInstantMode: instant,
       checkedQuestions: {},
       questionNotes: {},
       updatedAt: new Date().toISOString(),
     };
+    setOriginDeviceId(devId);
+    setElapsedMs(0);
+    setElapsedSeconds(0);
+    activeExamSessionRef.current = session;
     persistActiveExam(session);
   };
 
@@ -674,13 +757,26 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
    */
   const resumeActiveExam = () => {
     if (!activeExamSession) return;
+    const nowEpoch = Date.now() + clockSkewRef.current;
     setActiveQuiz(activeExamSession.quiz);
     setUserAnswers(activeExamSession.userAnswers || {});
     setCurrentQuestionIndex(activeExamSession.currentQuestionIndex || 0);
-    setElapsedSeconds(activeExamSession.elapsedSeconds || 0);
     setIsInstantMode(!!activeExamSession.isInstantMode);
     setCheckedQuestions(activeExamSession.checkedQuestions || {});
     setQuestionNotes(activeExamSession.questionNotes || {});
+
+    const base = activeExamSession.elapsedMs || (activeExamSession.elapsedSeconds ? activeExamSession.elapsedSeconds * 1000 : 0);
+    const updatedSession: ActiveExamSession = {
+      ...activeExamSession,
+      startedAtMs: nowEpoch,
+      baseElapsedMs: base,
+      originDeviceId: activeExamSession.originDeviceId || getOrCreateDeviceId(),
+      isTimerRunning: true,
+      updatedAt: new Date().toISOString(),
+    };
+    setOriginDeviceId(updatedSession.originDeviceId || null);
+    activeExamSessionRef.current = updatedSession;
+    persistActiveExam(updatedSession);
     setIsTimerRunning(true);
     setViewState('quiz');
     addToast(`Resumed "${activeExamSession.quiz.title}" at Question ${(activeExamSession.currentQuestionIndex || 0) + 1}`, 'info');
@@ -691,11 +787,48 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
    */
   const discardActiveExam = () => {
     persistActiveExam(null);
+    activeExamSessionRef.current = null;
     setActiveQuiz(null);
     setUserAnswers({});
     setCurrentQuestionIndex(0);
+    setElapsedMs(0);
+    setElapsedSeconds(0);
     setIsTimerRunning(false);
+    setOriginDeviceId(null);
     addToast('In-progress quiz discarded', 'info');
+  };
+
+  /**
+   * Helper to build fully-anchored ActiveExamSession payload with millisecond epoch time
+   */
+  const buildActiveExamPayload = (
+    overrides: {
+      userAnswers?: Record<number, number>;
+      currentQuestionIndex?: number;
+      checkedQuestions?: Record<number, boolean>;
+      questionNotes?: Record<number, string>;
+      quiz?: Quiz;
+    } = {}
+  ): ActiveExamSession | null => {
+    if (!activeQuiz) return null;
+    const cur = activeExamSessionRef.current;
+    const nowEpoch = Date.now() + clockSkewRef.current;
+
+    return {
+      quiz: overrides.quiz || activeQuiz,
+      userAnswers: overrides.userAnswers !== undefined ? overrides.userAnswers : userAnswers,
+      currentQuestionIndex: overrides.currentQuestionIndex !== undefined ? overrides.currentQuestionIndex : currentQuestionIndex,
+      elapsedSeconds,
+      elapsedMs,
+      startedAtMs: cur?.startedAtMs || nowEpoch,
+      baseElapsedMs: cur?.baseElapsedMs || 0,
+      originDeviceId: cur?.originDeviceId || getOrCreateDeviceId(),
+      isTimerRunning: true,
+      isInstantMode,
+      checkedQuestions: overrides.checkedQuestions !== undefined ? overrides.checkedQuestions : checkedQuestions,
+      questionNotes: overrides.questionNotes !== undefined ? overrides.questionNotes : questionNotes,
+      updatedAt: new Date().toISOString(),
+    };
   };
 
   /**
@@ -713,17 +846,14 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
     setUserAnswers(updatedAnswers);
 
     if (activeQuiz) {
-      const session: ActiveExamSession = {
-        quiz: activeQuiz,
+      const session = buildActiveExamPayload({
         userAnswers: updatedAnswers,
         currentQuestionIndex: questionIndex,
-        elapsedSeconds,
-        isInstantMode,
-        checkedQuestions,
-        questionNotes,
-        updatedAt: new Date().toISOString(),
-      };
-      persistActiveExam(session);
+      });
+      if (session) {
+        activeExamSessionRef.current = session;
+        persistActiveExam(session);
+      }
     }
   };
 
@@ -739,17 +869,14 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
     setCheckedQuestions(updatedChecked);
 
     if (activeQuiz) {
-      const session: ActiveExamSession = {
-        quiz: activeQuiz,
-        userAnswers,
-        currentQuestionIndex: questionIndex,
-        elapsedSeconds,
-        isInstantMode,
+      const session = buildActiveExamPayload({
         checkedQuestions: updatedChecked,
-        questionNotes,
-        updatedAt: new Date().toISOString(),
-      };
-      persistActiveExam(session);
+        currentQuestionIndex: questionIndex,
+      });
+      if (session) {
+        activeExamSessionRef.current = session;
+        persistActiveExam(session);
+      }
     }
   };
 
@@ -783,17 +910,15 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
     delete updatedAnswers[questionIndex];
     setUserAnswers(updatedAnswers);
 
-    const session: ActiveExamSession = {
+    const session = buildActiveExamPayload({
       quiz: updatedQuiz,
       userAnswers: updatedAnswers,
       currentQuestionIndex: questionIndex,
-      elapsedSeconds,
-      isInstantMode,
-      checkedQuestions,
-      questionNotes,
-      updatedAt: new Date().toISOString(),
-    };
-    persistActiveExam(session);
+    });
+    if (session) {
+      activeExamSessionRef.current = session;
+      persistActiveExam(session);
+    }
 
     addToast('Options randomized for Question ' + (questionIndex + 1), 'info');
   };
@@ -806,34 +931,25 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
     setQuestionNotes(updatedNotes);
 
     if (activeQuiz) {
-      const session: ActiveExamSession = {
-        quiz: activeQuiz,
-        userAnswers,
-        currentQuestionIndex: questionIndex,
-        elapsedSeconds,
-        isInstantMode,
-        checkedQuestions,
+      const session = buildActiveExamPayload({
         questionNotes: updatedNotes,
-        updatedAt: new Date().toISOString(),
-      };
-      persistActiveExam(session);
+        currentQuestionIndex: questionIndex,
+      });
+      if (session) {
+        activeExamSessionRef.current = session;
+        persistActiveExam(session);
+      }
     }
   };
 
   const goToQuestion = (index: number) => {
     if (activeQuiz && index >= 0 && index < activeQuiz.questions.length) {
       setCurrentQuestionIndex(index);
-      const session: ActiveExamSession = {
-        quiz: activeQuiz,
-        userAnswers,
-        currentQuestionIndex: index,
-        elapsedSeconds,
-        isInstantMode,
-        checkedQuestions,
-        questionNotes,
-        updatedAt: new Date().toISOString(),
-      };
-      persistActiveExam(session);
+      const session = buildActiveExamPayload({ currentQuestionIndex: index });
+      if (session) {
+        activeExamSessionRef.current = session;
+        persistActiveExam(session);
+      }
     }
   };
 
@@ -841,17 +957,11 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
     if (activeQuiz && currentQuestionIndex < activeQuiz.questions.length - 1) {
       const nextIdx = currentQuestionIndex + 1;
       setCurrentQuestionIndex(nextIdx);
-      const session: ActiveExamSession = {
-        quiz: activeQuiz,
-        userAnswers,
-        currentQuestionIndex: nextIdx,
-        elapsedSeconds,
-        isInstantMode,
-        checkedQuestions,
-        questionNotes,
-        updatedAt: new Date().toISOString(),
-      };
-      persistActiveExam(session);
+      const session = buildActiveExamPayload({ currentQuestionIndex: nextIdx });
+      if (session) {
+        activeExamSessionRef.current = session;
+        persistActiveExam(session);
+      }
     }
   };
 
@@ -859,17 +969,11 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
     if (currentQuestionIndex > 0) {
       const prevIdx = currentQuestionIndex - 1;
       setCurrentQuestionIndex(prevIdx);
-      const session: ActiveExamSession = {
-        quiz: activeQuiz,
-        userAnswers,
-        currentQuestionIndex: prevIdx,
-        elapsedSeconds,
-        isInstantMode,
-        checkedQuestions,
-        questionNotes,
-        updatedAt: new Date().toISOString(),
-      };
-      persistActiveExam(session);
+      const session = buildActiveExamPayload({ currentQuestionIndex: prevIdx });
+      if (session) {
+        activeExamSessionRef.current = session;
+        persistActiveExam(session);
+      }
     }
   };
 
@@ -885,9 +989,11 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
       }
     });
 
-    const mins = Math.floor(elapsedSeconds / 60);
-    const secs = elapsedSeconds % 60;
-    const timeSpent = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+    const totalMs = elapsedMs || (elapsedSeconds * 1000);
+    const mins = Math.floor(totalMs / 60000);
+    const secs = Math.floor((totalMs % 60000) / 1000);
+    const millis = Math.floor((totalMs % 1000) / 10);
+    const timeSpent = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}.${String(millis).padStart(2, '0')}`;
 
     const attempt: QuizAttempt = {
       id: `attempt_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
@@ -908,11 +1014,15 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
 
     // Clear active in-progress exam from cloud and device!
     persistActiveExam(null);
+    activeExamSessionRef.current = null;
     setActiveQuiz(null);
     setUserAnswers({});
     setCheckedQuestions({});
     setQuestionNotes({});
     setCurrentQuestionIndex(0);
+    setElapsedMs(0);
+    setElapsedSeconds(0);
+    setOriginDeviceId(null);
 
     // If user is logged in, sync attempt to Firestore in background
     if (user && typeof navigator !== 'undefined' && navigator.onLine) {
@@ -1175,6 +1285,9 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
         setIsInstantMode,
         checkedQuestions,
         elapsedSeconds,
+        elapsedMs,
+        clockSkewMs,
+        originDeviceId,
         isTimerRunning,
         activeExamSession,
         resumeActiveExam,

@@ -30,6 +30,11 @@ export interface ActiveExamSession {
   userAnswers: Record<number, number>;
   currentQuestionIndex: number;
   elapsedSeconds: number;
+  elapsedMs?: number; // High-precision elapsed milliseconds
+  startedAtMs?: number; // Absolute epoch timestamp when test was first opened
+  baseElapsedMs?: number; // Accumulated baseline milliseconds (on pause/resume)
+  originDeviceId?: string; // Identifier of device where test was first opened (mobile or laptop)
+  isTimerRunning?: boolean;
   isInstantMode: boolean;
   checkedQuestions: Record<number, boolean>;
   questionNotes: Record<number, string>;
