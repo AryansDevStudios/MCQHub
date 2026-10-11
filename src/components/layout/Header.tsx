@@ -7,51 +7,52 @@ import { ThemeToggle } from '@/components/ThemeToggle';
 import { UserAuthDialog } from '@/components/auth/UserAuthDialog';
 import { Button } from '@/components/ui/button';
 import {
-  Wand2,
+  Sparkles,
   FileCode2,
   BookmarkCheck,
   History,
-  Activity,
   User,
   PlayCircle,
   BarChart2,
+  Settings,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { ViewState } from '@/lib/types';
 
 export function Header() {
-  const { view, setView, user, heuristicStatus, isCheckingHeuristic, activeQuiz, history: attemptHistory } = useQuiz();
+  const { view, setView, user, activeQuiz } = useQuiz();
   const [authDialogOpen, setAuthDialogOpen] = useState(false);
-  const [authDialogTab, setAuthDialogTab] = useState<'auth' | 'sessions' | 'heuristic'>('auth');
+  const [authDialogTab, setAuthDialogTab] = useState<'auth' | 'settings' | 'sessions'>('auth');
 
-  const openAuthWithTab = (tab: 'auth' | 'sessions' | 'heuristic') => {
+  const openAuthWithTab = (tab: 'auth' | 'settings' | 'sessions') => {
     setAuthDialogTab(tab);
     setAuthDialogOpen(true);
   };
 
-  const navItems: { id: ViewState; label: string; icon: React.ReactNode; ext: string }[] = [
-    { id: 'home', label: 'Generator', icon: <Wand2 className="w-3.5 h-3.5" />, ext: '.ai' },
-    { id: 'editor', label: 'JSON Studio', icon: <FileCode2 className="w-3.5 h-3.5" />, ext: '.json' },
-    { id: 'library', label: 'Library', icon: <BookmarkCheck className="w-3.5 h-3.5" />, ext: '.store' },
-    { id: 'history', label: 'History', icon: <History className="w-3.5 h-3.5" />, ext: '.log' },
+  const navItems: { id: ViewState; label: string; icon: React.ReactNode }[] = [
+    { id: 'home', label: 'Create', icon: <Sparkles className="w-3.5 h-3.5" /> },
+    { id: 'editor', label: 'Custom JSON', icon: <FileCode2 className="w-3.5 h-3.5" /> },
+    { id: 'library', label: 'Library', icon: <BookmarkCheck className="w-3.5 h-3.5" /> },
+    { id: 'history', label: 'History', icon: <History className="w-3.5 h-3.5" /> },
   ];
 
   return (
     <>
-      <header className="sticky top-0 z-40 w-full border-b border-border/80 bg-background/95 backdrop-blur-sm select-none">
-        <div className="flex h-11 items-center justify-between px-3 md:px-4">
+      <header className="sticky top-0 z-40 w-full border-b border-border/80 bg-background/95 backdrop-blur-md select-none transition-colors">
+        <div className="flex h-12 items-center justify-between px-2.5 sm:px-4">
           
-          {/* Brand & Editor Tabs */}
-          <div className="flex items-center gap-3 overflow-x-auto no-scrollbar py-1">
-            {/* Logo & Name */}
+          {/* Left: Brand & Navigation */}
+          <div className="flex items-center gap-1.5 sm:gap-3">
+            {/* Logo & Brand */}
             <button
               onClick={() => setView('home')}
-              className="flex items-center gap-2 pr-2 hover:opacity-85 transition-opacity shrink-0"
+              className="flex items-center gap-2 pr-1 sm:pr-2 hover:opacity-85 transition-opacity shrink-0"
+              title="MCQHub Home"
             >
-              <div className="w-6 h-6 rounded bg-primary/10 border border-primary/20 flex items-center justify-center text-primary">
+              <div className="w-7 h-7 rounded-md bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shadow-xs">
                 <Logo className="w-4 h-4" />
               </div>
-              <span className="font-semibold text-xs tracking-tight font-mono text-foreground">
+              <span className="font-bold text-sm tracking-tight text-foreground hidden sm:inline">
                 MCQHub<span className="text-primary font-bold">.io</span>
               </span>
             </button>
@@ -59,8 +60,8 @@ export function Header() {
             {/* Separator */}
             <div className="h-4 w-[1px] bg-border/80 shrink-0 hidden sm:block" />
 
-            {/* Navigation Tabs (VS Code Tab Aesthetic) */}
-            <nav className="flex items-center gap-1 shrink-0">
+            {/* Navigation Tabs (Mobile: Icons Only, Desktop: Icon + Text) */}
+            <nav className="flex items-center gap-1">
               {navItems.map((item) => {
                 const isActive = view === item.id;
                 return (
@@ -68,17 +69,17 @@ export function Header() {
                     key={item.id}
                     onClick={() => setView(item.id)}
                     className={cn(
-                      'group flex items-center gap-1.5 px-2.5 py-1 rounded text-xs transition-colors font-mono',
+                      'flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-all',
                       isActive
-                        ? 'bg-muted text-foreground border border-border/70 shadow-xs'
-                        : 'text-muted-foreground hover:text-foreground hover:bg-muted/40'
+                        ? 'bg-primary/15 text-primary border border-primary/30 shadow-xs'
+                        : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
                     )}
+                    title={item.label}
                   >
                     <span className={cn('transition-colors', isActive ? 'text-primary' : 'text-muted-foreground')}>
                       {item.icon}
                     </span>
-                    <span className="font-medium text-[11px]">{item.label}</span>
-                    <span className="text-[10px] opacity-40 group-hover:opacity-70">{item.ext}</span>
+                    <span className="hidden md:inline text-xs">{item.label}</span>
                   </button>
                 );
               })}
@@ -88,14 +89,15 @@ export function Header() {
                 <button
                   onClick={() => setView('quiz')}
                   className={cn(
-                    'flex items-center gap-1.5 px-2.5 py-1 rounded text-xs transition-colors font-mono',
+                    'flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-all',
                     view === 'quiz'
-                      ? 'bg-primary/15 text-primary border border-primary/30 font-semibold'
-                      : 'text-sky-400/80 hover:text-sky-300 hover:bg-primary/10'
+                      ? 'bg-primary/20 text-primary border border-primary/40 font-semibold'
+                      : 'text-primary/80 hover:text-primary hover:bg-primary/10'
                   )}
+                  title="Current Active Exam"
                 >
                   <PlayCircle className="w-3.5 h-3.5" />
-                  <span className="text-[11px] truncate max-w-[100px]">Active Exam</span>
+                  <span className="hidden md:inline text-xs truncate max-w-[90px]">Exam</span>
                 </button>
               )}
 
@@ -103,48 +105,37 @@ export function Header() {
               {view === 'results' && (
                 <button
                   onClick={() => setView('results')}
-                  className="flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-mono bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-semibold"
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-semibold shadow-xs"
+                  title="Assessment Results"
                 >
                   <BarChart2 className="w-3.5 h-3.5" />
-                  <span className="text-[11px]">Results</span>
+                  <span className="hidden md:inline text-xs">Results</span>
                 </button>
               )}
             </nav>
           </div>
 
           {/* Right Controls */}
-          <div className="flex items-center gap-1.5 shrink-0 pl-2">
-            
-            {/* Firebase Storage Heuristic Pill */}
-            <button
-              onClick={() => openAuthWithTab('heuristic')}
-              className={cn(
-                'flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-mono border transition-colors',
-                heuristicStatus?.ok
-                  ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20'
-                  : 'border-amber-500/30 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20'
-              )}
-              title="Cloud Firestore Heuristic Check"
-            >
-              <div
-                className={cn(
-                  'w-1.5 h-1.5 rounded-full shrink-0',
-                  heuristicStatus?.ok ? 'bg-emerald-400' : 'bg-amber-400 animate-pulse'
-                )}
-              />
-              <span className="hidden md:inline">Firestore:</span>
-              <span>{heuristicStatus?.ok ? `${heuristicStatus.latencyMs}ms` : 'Ready'}</span>
-            </button>
-
-            {/* User Account Pill */}
+          <div className="flex items-center gap-1 sm:gap-2 shrink-0">
+            {/* User Account Button */}
             <button
               onClick={() => openAuthWithTab('auth')}
-              className="flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-mono border border-border/70 hover:bg-muted/50 text-foreground transition-colors"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs border border-border/80 hover:bg-muted/50 text-foreground transition-colors"
+              title={user ? `Logged in as @${user.username}` : 'Sign In / Account'}
             >
               <User className="w-3.5 h-3.5 text-primary" />
-              <span className="text-[11px] max-w-[90px] truncate">
+              <span className="hidden sm:inline text-xs max-w-[100px] truncate">
                 {user ? user.displayName : 'Sign In'}
               </span>
+            </button>
+
+            {/* Dedicated Settings Button */}
+            <button
+              onClick={() => openAuthWithTab('settings')}
+              className="p-1.5 rounded-md border border-border/80 hover:bg-muted/50 text-muted-foreground hover:text-foreground transition-colors"
+              title="Settings & API Key"
+            >
+              <Settings className="w-4 h-4" />
             </button>
 
             {/* Theme Toggle */}
@@ -153,7 +144,7 @@ export function Header() {
         </div>
       </header>
 
-      {/* Auth & Diagnostic Dialog */}
+      {/* Auth & Settings Dialog */}
       <UserAuthDialog
         open={authDialogOpen}
         onOpenChange={setAuthDialogOpen}

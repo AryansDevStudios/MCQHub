@@ -17,15 +17,19 @@ import { Badge } from '@/components/ui/badge';
 import {
   User,
   KeyRound,
-  ShieldCheck,
-  Activity,
   History,
   Copy,
   Check,
   RefreshCw,
   LogOut,
-  Database,
-  AlertTriangle,
+  Settings,
+  Eye,
+  EyeOff,
+  Cloud,
+  CheckCircle2,
+  Trash2,
+  Sparkles,
+  ExternalLink,
 } from 'lucide-react';
 import { getUserSessionsFirestore } from '@/lib/firestoreDb';
 import type { UserSession } from '@/lib/types';
@@ -33,17 +37,10 @@ import type { UserSession } from '@/lib/types';
 interface UserAuthDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  defaultTab?: 'auth' | 'sessions' | 'heuristic';
+  defaultTab?: 'auth' | 'sessions' | 'settings';
 }
 
-const FIRESTORE_RULES_SNIPPET = `rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
-    match /{document=**} {
-      allow read, write: if true;
-    }
-  }
-}`;
+const STORAGE_API_KEY = 'mcqhub_gemini_api_key';
 
 export function UserAuthDialog({ open, onOpenChange, defaultTab = 'auth' }: UserAuthDialogProps) {
   const {
@@ -53,23 +50,27 @@ export function UserAuthDialog({ open, onOpenChange, defaultTab = 'auth' }: User
     login,
     register,
     logout,
-    syncToStorage,
     savedQuizzes,
     history,
-    heuristicStatus,
-    isCheckingHeuristic,
-    checkHeuristic,
+    isSyncing,
+    lastSyncTime,
+    syncLibraryWithCloud,
+    addToast,
   } = useQuiz();
 
-  const [activeTab, setActiveTab] = useState<'auth' | 'sessions' | 'heuristic'>(defaultTab);
+  const [activeTab, setActiveTab] = useState<'auth' | 'sessions' | 'settings'>(defaultTab);
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
   const [username, setUsername] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [password, setPassword] = useState('');
   const [copiedToken, setCopiedToken] = useState(false);
-  const [copiedRules, setCopiedRules] = useState(false);
   const [sessionList, setSessionList] = useState<UserSession[]>([]);
   const [isLoadingSessions, setIsLoadingSessions] = useState(false);
+
+  // Custom API key state
+  const [apiKeyInput, setApiKeyInput] = useState('');
+  const [showApiKey, setShowApiKey] = useState(false);
+  const [savedApiKey, setSavedApiKey] = useState<string | null>(null);
 
   useEffect(() => {
     if (open) {
@@ -77,6 +78,11 @@ export function UserAuthDialog({ open, onOpenChange, defaultTab = 'auth' }: User
       if (user) {
         loadSessions(user.username);
       }
+      try {
+        const stored = localStorage.getItem(STORAGE_API_KEY);
+        setSavedApiKey(stored);
+        setApiKeyInput(stored || '');
+      } catch {}
     }
   }, [open, defaultTab, user]);
 
@@ -116,10 +122,28 @@ export function UserAuthDialog({ open, onOpenChange, defaultTab = 'auth' }: User
     setTimeout(() => setCopiedToken(false), 2000);
   };
 
-  const copyRules = () => {
-    navigator.clipboard.writeText(FIRESTORE_RULES_SNIPPET);
-    setCopiedRules(true);
-    setTimeout(() => setCopiedRules(false), 2000);
+  const handleSaveApiKey = () => {
+    const trimmed = apiKeyInput.trim();
+    if (!trimmed) {
+      addToast('Please enter an API key', 'error');
+      return;
+    }
+    try {
+      localStorage.setItem(STORAGE_API_KEY, trimmed);
+      setSavedApiKey(trimmed);
+      addToast('Custom Google Gemini API key saved', 'success');
+    } catch (err: any) {
+      addToast('Failed to save API key to local storage', 'error');
+    }
+  };
+
+  const handleClearApiKey = () => {
+    try {
+      localStorage.removeItem(STORAGE_API_KEY);
+      setSavedApiKey(null);
+      setApiKeyInput('');
+      addToast('Custom API key removed. Using standard engine.', 'info');
+    } catch {}
   };
 
   return (
@@ -127,16 +151,16 @@ export function UserAuthDialog({ open, onOpenChange, defaultTab = 'auth' }: User
       <DialogContent className="sm:max-w-lg bg-card border-border text-foreground p-0 overflow-hidden shadow-2xl">
         <DialogHeader className="px-5 pt-5 pb-3 border-b border-border/60 bg-muted/20">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2.5">
               <div className="w-8 h-8 rounded bg-primary/10 border border-primary/20 flex items-center justify-center text-primary">
-                <Database className="w-4 h-4" />
+                {activeTab === 'settings' ? <Settings className="w-4 h-4" /> : <User className="w-4 h-4" />}
               </div>
               <div>
                 <DialogTitle className="text-base font-semibold tracking-tight">
-                  User Account & Cloud Firestore Gateway
+                  {user ? 'Account & Settings' : 'Sign In & Settings'}
                 </DialogTitle>
                 <DialogDescription className="text-xs text-muted-foreground">
-                  Firebase Cloud Firestore Database • Session Token Authentication
+                  Manage your account, cloud sync, and application preferences
                 </DialogDescription>
               </div>
             </div>
@@ -148,15 +172,15 @@ export function UserAuthDialog({ open, onOpenChange, defaultTab = 'auth' }: User
             <TabsList className="grid grid-cols-3 mb-4 bg-muted/40 p-1 text-xs">
               <TabsTrigger value="auth" className="gap-1.5 text-xs py-1.5">
                 <User className="w-3.5 h-3.5" />
-                <span>{user ? 'Account' : 'Authentication'}</span>
+                <span>{user ? 'Account' : 'Sign In'}</span>
+              </TabsTrigger>
+              <TabsTrigger value="settings" className="gap-1.5 text-xs py-1.5">
+                <Settings className="w-3.5 h-3.5" />
+                <span>Settings</span>
               </TabsTrigger>
               <TabsTrigger value="sessions" className="gap-1.5 text-xs py-1.5" disabled={!user}>
                 <History className="w-3.5 h-3.5" />
-                <span>Sessions & Tokens</span>
-              </TabsTrigger>
-              <TabsTrigger value="heuristic" className="gap-1.5 text-xs py-1.5">
-                <Activity className="w-3.5 h-3.5" />
-                <span>Heuristic Diagnostic</span>
+                <span>Devices</span>
               </TabsTrigger>
             </TabsList>
 
@@ -166,7 +190,7 @@ export function UserAuthDialog({ open, onOpenChange, defaultTab = 'auth' }: User
                 <div>
                   <div className="flex items-center justify-between mb-3 border-b border-border/40 pb-2">
                     <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">
-                      {authMode === 'login' ? 'Existing User Sign In' : 'New User Registration'}
+                      {authMode === 'login' ? 'Existing Account' : 'Create Free Account'}
                     </span>
                     <div className="flex gap-1">
                       <Button
@@ -185,17 +209,17 @@ export function UserAuthDialog({ open, onOpenChange, defaultTab = 'auth' }: User
                         className="h-7 text-xs px-2.5"
                         onClick={() => setAuthMode('register')}
                       >
-                        Create Account
+                        Register
                       </Button>
                     </div>
                   </div>
 
                   <form onSubmit={handleAuthSubmit} className="space-y-3">
                     <div className="space-y-1">
-                      <Label className="text-xs font-medium">Username (Unique Identifier)</Label>
+                      <Label className="text-xs font-medium">Username</Label>
                       <Input
                         type="text"
-                        placeholder="e.g. aryansdevstudios"
+                        placeholder="e.g. alex_learner"
                         value={username}
                         onChange={(e) => setUsername(e.target.value)}
                         required
@@ -208,7 +232,7 @@ export function UserAuthDialog({ open, onOpenChange, defaultTab = 'auth' }: User
                         <Label className="text-xs font-medium">Display Name (Optional)</Label>
                         <Input
                           type="text"
-                          placeholder="e.g. Aryan Sharma"
+                          placeholder="e.g. Alex"
                           value={displayName}
                           onChange={(e) => setDisplayName(e.target.value)}
                           className="h-8 text-xs bg-background"
@@ -229,8 +253,8 @@ export function UserAuthDialog({ open, onOpenChange, defaultTab = 'auth' }: User
                     </div>
 
                     <div className="pt-2 flex items-center justify-between">
-                      <span className="text-[11px] text-muted-foreground font-mono">
-                        Firestore path: <code className="text-primary">users/{'{username}'}</code>
+                      <span className="text-[11px] text-muted-foreground">
+                        Syncs quizzes seamlessly across devices.
                       </span>
                       <Button
                         type="submit"
@@ -243,7 +267,7 @@ export function UserAuthDialog({ open, onOpenChange, defaultTab = 'auth' }: User
                         ) : (
                           <KeyRound className="w-3.5 h-3.5 mr-1.5" />
                         )}
-                        {authMode === 'login' ? 'Sign In to Firestore' : 'Create & Register'}
+                        {authMode === 'login' ? 'Sign In' : 'Create Account'}
                       </Button>
                     </div>
                   </form>
@@ -254,53 +278,30 @@ export function UserAuthDialog({ open, onOpenChange, defaultTab = 'auth' }: User
                   <div className="p-3.5 rounded-lg border border-border/80 bg-muted/20 space-y-3">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2.5">
-                        <div className="w-9 h-9 rounded bg-primary/10 border border-primary/20 flex items-center justify-center font-mono font-bold text-primary text-sm">
+                        <div className="w-9 h-9 rounded-full bg-primary/15 border border-primary/30 flex items-center justify-center font-mono font-bold text-primary text-sm">
                           {user.displayName.substring(0, 2).toUpperCase()}
                         </div>
                         <div>
                           <div className="text-sm font-semibold flex items-center gap-1.5">
                             {user.displayName}
-                            <Badge variant="outline" className="text-[10px] py-0 px-1 font-mono">
-                              {user.userId}
-                            </Badge>
                           </div>
                           <div className="text-xs text-muted-foreground font-mono">@{user.username}</div>
                         </div>
                       </div>
-                      <Badge className="bg-emerald-500/10 text-emerald-400 border-emerald-500/20 text-xs">
-                        Authenticated
+                      <Badge className="bg-emerald-500/10 text-emerald-500 border-emerald-500/20 text-xs">
+                        Connected
                       </Badge>
                     </div>
 
-                    {/* Active Token ID Box */}
-                    {activeSession && (
-                      <div className="p-2 rounded bg-background border border-border/60 text-xs space-y-1">
-                        <div className="flex items-center justify-between text-muted-foreground text-[11px]">
-                          <span>Active Session Token ID</span>
-                          <button
-                            type="button"
-                            onClick={() => copyToken(activeSession.tokenId)}
-                            className="flex items-center gap-1 hover:text-foreground text-[10px] text-primary"
-                          >
-                            {copiedToken ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
-                            {copiedToken ? 'Copied' : 'Copy Token'}
-                          </button>
-                        </div>
-                        <div className="font-mono text-[11px] truncate text-foreground/90 select-all">
-                          {activeSession.tokenId}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Firestore Records Summary */}
+                    {/* Records Summary */}
                     <div className="grid grid-cols-2 gap-2 text-xs pt-1">
                       <div className="p-2 rounded bg-background/50 border border-border/40">
-                        <div className="text-muted-foreground text-[11px]">Library Quizzes</div>
-                        <div className="font-semibold text-sm font-mono mt-0.5">{savedQuizzes.length} stored</div>
+                        <div className="text-muted-foreground text-[11px]">Saved Quizzes</div>
+                        <div className="font-semibold text-sm font-mono mt-0.5">{savedQuizzes.length} saved</div>
                       </div>
                       <div className="p-2 rounded bg-background/50 border border-border/40">
-                        <div className="text-muted-foreground text-[11px]">Exam Attempts</div>
-                        <div className="font-semibold text-sm font-mono mt-0.5">{history.length} logged</div>
+                        <div className="text-muted-foreground text-[11px]">Quiz Attempts</div>
+                        <div className="font-semibold text-sm font-mono mt-0.5">{history.length} completed</div>
                       </div>
                     </div>
                   </div>
@@ -310,17 +311,18 @@ export function UserAuthDialog({ open, onOpenChange, defaultTab = 'auth' }: User
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={syncToStorage}
+                      disabled={isSyncing}
+                      onClick={() => syncLibraryWithCloud(false)}
                       className="h-8 text-xs gap-1.5 border-border/80"
                     >
-                      <RefreshCw className="w-3.5 h-3.5 text-primary" />
-                      Sync Firestore
+                      <RefreshCw className={`w-3.5 h-3.5 text-primary ${isSyncing ? 'animate-spin' : ''}`} />
+                      <span>{isSyncing ? 'Syncing...' : 'Sync Cloud Now'}</span>
                     </Button>
                     <Button
                       variant="ghost"
                       size="sm"
                       onClick={logout}
-                      className="h-8 text-xs text-rose-400 hover:text-rose-300 hover:bg-rose-950/20 gap-1.5"
+                      className="h-8 text-xs text-rose-500 hover:text-rose-600 hover:bg-rose-500/10 gap-1.5"
                     >
                       <LogOut className="w-3.5 h-3.5" />
                       Sign Out
@@ -330,17 +332,136 @@ export function UserAuthDialog({ open, onOpenChange, defaultTab = 'auth' }: User
               )}
             </TabsContent>
 
-            {/* TAB 2: SESSIONS & TOKEN HISTORY */}
+            {/* TAB 2: SETTINGS (API KEY & PREFERENCES) */}
+            <TabsContent value="settings" className="space-y-4 focus-visible:outline-none">
+              <div className="p-3.5 rounded-lg border border-border/80 bg-muted/20 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-primary" />
+                    <span className="text-xs font-semibold text-foreground">AI Generation Settings</span>
+                  </div>
+                  {savedApiKey ? (
+                    <Badge variant="outline" className="text-[11px] text-emerald-500 border-emerald-500/30 gap-1">
+                      <CheckCircle2 className="w-3 h-3" />
+                      Using Custom Key
+                    </Badge>
+                  ) : (
+                    <Badge variant="outline" className="text-[11px] text-muted-foreground border-border">
+                      Default Engine Active
+                    </Badge>
+                  )}
+                </div>
+
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  MCQHub includes free built-in question generation. If you prefer to use your personal Google Gemini API key for higher rate limits, you can enter it below.
+                </p>
+
+                <div className="space-y-2 pt-1">
+                  <Label className="text-xs font-medium">Google Gemini API Key</Label>
+                  <div className="relative">
+                    <Input
+                      type={showApiKey ? 'text' : 'password'}
+                      placeholder="AIzaSy..."
+                      value={apiKeyInput}
+                      onChange={(e) => setApiKeyInput(e.target.value)}
+                      className="h-8 text-xs font-mono pr-8 bg-background"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowApiKey(!showApiKey)}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    >
+                      {showApiKey ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between pt-1">
+                  <a
+                    href="https://aistudio.google.com/apikey"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-[11px] text-primary hover:underline inline-flex items-center gap-1"
+                  >
+                    <span>Get a free key from Google AI Studio</span>
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+
+                  <div className="flex gap-2">
+                    {savedApiKey && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={handleClearApiKey}
+                        className="h-7 text-xs text-rose-500 hover:text-rose-600 px-2 gap-1"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                        Clear
+                      </Button>
+                    )}
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={handleSaveApiKey}
+                      className="h-7 text-xs px-3 bg-primary text-primary-foreground font-medium"
+                    >
+                      Save Key
+                    </Button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Cloud Sync Status Card */}
+              <div className="p-3.5 rounded-lg border border-border/80 bg-muted/20 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Cloud className="w-4 h-4 text-primary" />
+                    <span className="text-xs font-semibold text-foreground">Cloud Sync & Storage</span>
+                  </div>
+                  <Badge variant="outline" className="text-[11px] text-primary border-primary/30">
+                    {user ? 'Auto-sync active' : 'Local storage only'}
+                  </Badge>
+                </div>
+
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  {user
+                    ? 'Your custom quizzes and test history automatically synchronize across your laptop, phone, and tablet.'
+                    : 'Sign in to sync your questions and test scores across your devices.'}
+                </p>
+
+                {user && (
+                  <div className="flex items-center justify-between pt-2 border-t border-border/50 text-xs">
+                    <span className="text-muted-foreground text-[11px]">
+                      {lastSyncTime ? `Last synced: ${new Date(lastSyncTime).toLocaleTimeString()}` : 'Ready to sync'}
+                    </span>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={isSyncing}
+                      onClick={() => syncLibraryWithCloud(false)}
+                      className="h-7 text-xs gap-1"
+                    >
+                      <RefreshCw className={`w-3 h-3 ${isSyncing ? 'animate-spin text-primary' : ''}`} />
+                      <span>{isSyncing ? 'Syncing...' : 'Sync Now'}</span>
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </TabsContent>
+
+            {/* TAB 3: SESSIONS */}
             <TabsContent value="sessions" className="space-y-3 focus-visible:outline-none">
               <div className="flex items-center justify-between">
-                <span className="text-xs text-muted-foreground font-mono">
-                  Login audit log in Firestore doc: <code className="text-primary">users/{user?.username}</code>
+                <span className="text-xs text-muted-foreground">
+                  Active login sessions associated with your account:
                 </span>
                 <Button
                   variant="ghost"
                   size="sm"
                   onClick={() => user && loadSessions(user.username)}
-                  className="h-6 px-2 text-[11px] gap-1 font-mono"
+                  className="h-6 px-2 text-[11px] gap-1"
                 >
                   <RefreshCw className="w-3 h-3" />
                   Refresh
@@ -351,31 +472,31 @@ export function UserAuthDialog({ open, onOpenChange, defaultTab = 'auth' }: User
                 {isLoadingSessions ? (
                   <div className="py-8 text-center text-xs text-muted-foreground flex items-center justify-center gap-2">
                     <RefreshCw className="w-4 h-4 animate-spin text-primary" />
-                    Fetching sessions from Firestore...
+                    Loading devices...
                   </div>
                 ) : sessionList.length === 0 ? (
                   <div className="py-6 text-center text-xs text-muted-foreground">
-                    No prior session history recorded.
+                    No active sessions recorded.
                   </div>
                 ) : (
                   sessionList.map((s, idx) => (
                     <div
                       key={s.tokenId || idx}
-                      className="p-2.5 rounded border border-border/60 bg-muted/20 text-xs space-y-1 font-mono"
+                      className="p-2.5 rounded border border-border/60 bg-muted/20 text-xs space-y-1"
                     >
                       <div className="flex items-center justify-between">
-                        <span className="text-[11px] text-primary truncate max-w-[200px]">
+                        <span className="text-[11px] font-mono text-primary truncate max-w-[200px]">
                           {s.tokenId}
                         </span>
                         <Badge
                           variant="outline"
                           className={
                             idx === 0
-                              ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 text-[10px] py-0'
+                              ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20 text-[10px] py-0'
                               : 'text-[10px] py-0 text-muted-foreground'
                           }
                         >
-                          {idx === 0 ? 'Current Session' : 'Prior Login'}
+                          {idx === 0 ? 'Current Device' : 'Other Device'}
                         </Badge>
                       </div>
                       <div className="text-[11px] text-muted-foreground flex justify-between">
@@ -385,111 +506,6 @@ export function UserAuthDialog({ open, onOpenChange, defaultTab = 'auth' }: User
                     </div>
                   ))
                 )}
-              </div>
-            </TabsContent>
-
-            {/* TAB 3: HEURISTIC DIAGNOSTIC */}
-            <TabsContent value="heuristic" className="space-y-3.5 focus-visible:outline-none">
-              <div className="p-3 rounded-lg border border-border bg-muted/20 space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div
-                      className={`w-2.5 h-2.5 rounded-full ${
-                        heuristicStatus?.ok
-                          ? 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.5)]'
-                          : 'bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.5)]'
-                      }`}
-                    />
-                    <span className="text-xs font-semibold">
-                      {heuristicStatus?.ok ? 'Cloud Firestore Active' : 'Firestore Heuristic Status'}
-                    </span>
-                  </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={isCheckingHeuristic}
-                    onClick={checkHeuristic}
-                    className="h-7 text-xs px-2.5 gap-1.5 font-mono"
-                  >
-                    <RefreshCw className={`w-3 h-3 ${isCheckingHeuristic ? 'animate-spin text-primary' : ''}`} />
-                    Run Ping Probe
-                  </Button>
-                </div>
-
-                <div className="space-y-2 text-xs font-mono">
-                  <div className="flex justify-between py-1 border-b border-border/40">
-                    <span className="text-muted-foreground">Database Engine:</span>
-                    <span className="text-foreground">Google Cloud Firestore (Default)</span>
-                  </div>
-                  <div className="flex justify-between py-1 border-b border-border/40">
-                    <span className="text-muted-foreground">Project ID:</span>
-                    <span className="text-foreground">mcqhub-724e3</span>
-                  </div>
-                  <div className="flex justify-between py-1 border-b border-border/40">
-                    <span className="text-muted-foreground">Edge Gateway:</span>
-                    <span className="text-foreground">Cloudflare Workers (Ad-Block Immune)</span>
-                  </div>
-                  <div className="flex justify-between py-1 border-b border-border/40">
-                    <span className="text-muted-foreground">Round-trip Latency:</span>
-                    <span className={heuristicStatus?.ok ? 'text-emerald-400 font-bold' : 'text-amber-400 font-bold'}>
-                      {heuristicStatus ? `${heuristicStatus.latencyMs} ms` : 'Not tested'}
-                    </span>
-                  </div>
-                  <div className="flex justify-between py-1 border-b border-border/40">
-                    <span className="text-muted-foreground">Heuristic Probe:</span>
-                    <span className="text-primary">Worker /api/heuristic &rarr; Firestore /system/heuristic</span>
-                  </div>
-                  <div className="flex justify-between py-1">
-                    <span className="text-muted-foreground">Last Checked:</span>
-                    <span className="text-muted-foreground">
-                      {heuristicStatus?.timestamp ? new Date(heuristicStatus.timestamp).toLocaleTimeString() : 'N/A'}
-                    </span>
-                  </div>
-                </div>
-
-                {heuristicStatus?.error && (
-                  <div className="p-2.5 rounded bg-amber-950/30 border border-amber-800/40 text-[11px] text-amber-200/90 flex gap-2 items-start">
-                    <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
-                    <div className="leading-relaxed">
-                      <div><strong>Notice:</strong> {heuristicStatus.error}</div>
-                      <div className="text-[10px] text-muted-foreground mt-1">
-                        Local storage backup is actively preserving all registration, tokens, and assessments in the meantime.
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Firestore Security Rules Box */}
-              <div className="p-3 rounded-lg border border-border/70 bg-background/50 space-y-2 text-xs">
-                <div className="flex items-center justify-between">
-                  <div className="font-semibold text-foreground flex items-center gap-1.5">
-                    <ShieldCheck className="w-3.5 h-3.5 text-primary" />
-                    <span>Firestore Rules (<code className="font-mono text-[11px]">firestore.rules</code>)</span>
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={copyRules}
-                    className="h-6 px-2 text-[10px] font-mono gap-1 text-primary hover:text-foreground"
-                  >
-                    {copiedRules ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
-                    <span>{copiedRules ? 'Copied' : 'Copy Rules'}</span>
-                  </Button>
-                </div>
-                <pre className="p-2 rounded bg-muted/40 border border-border/50 text-[10px] font-mono text-muted-foreground overflow-x-auto">
-{`rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
-    match /{document=**} {
-      allow read, write: if true;
-    }
-  }
-}`}
-                </pre>
-                <p className="text-[10px] text-muted-foreground">
-                  Paste this into <strong>Firebase Console &gt; Firestore Database &gt; Rules</strong> to grant read/write access.
-                </p>
               </div>
             </TabsContent>
           </Tabs>

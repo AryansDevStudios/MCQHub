@@ -75,6 +75,7 @@ interface QuizContextType {
   deleteQuizFromLibrary: (indexOrTitle: string | number) => void;
   history: QuizAttempt[];
   clearHistory: () => void;
+  deleteHistoryAttempt: (id: string) => void;
   viewAttemptResult: (attempt: QuizAttempt) => void;
 
   // JSON Buffer for editor tab
@@ -707,6 +708,18 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
     addToast('Quiz removed from library', 'info');
   };
 
+  const deleteHistoryAttempt = (attemptId: string) => {
+    const updated = history.filter((h) => h.id !== attemptId);
+    setHistory(updated);
+    localStorage.setItem(STORAGE_KEYS.LOCAL_HISTORY, JSON.stringify(updated));
+
+    if (user && typeof navigator !== 'undefined' && navigator.onLine) {
+      saveUserHistoryFirestore(user.username, updated).catch(() => {});
+    }
+
+    addToast('Exam attempt removed from history', 'info');
+  };
+
   const clearHistory = () => {
     setHistory([]);
     localStorage.removeItem(STORAGE_KEYS.LOCAL_HISTORY);
@@ -769,6 +782,7 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
         deleteQuizFromLibrary,
         history,
         clearHistory,
+        deleteHistoryAttempt,
         viewAttemptResult,
         editorJsonBuffer,
         setEditorJsonBuffer,

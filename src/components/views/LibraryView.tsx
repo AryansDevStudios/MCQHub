@@ -21,11 +21,9 @@ import {
   FileCode2,
   Trash2,
   Search,
-  Database,
   Calendar,
   Layers,
   RefreshCw,
-  CloudCheck,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { Quiz } from '@/lib/types';
@@ -62,26 +60,25 @@ export function LibraryView() {
       <div className="border-b border-border/80 pb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <Badge variant="outline" className="font-mono text-[11px] py-0 px-1.5 text-primary border-primary/30">
-              Firestore Repository
+            <Badge variant="outline" className="text-xs py-0.5 px-2 text-primary border-primary/30">
+              Quiz Library
             </Badge>
-            <span className="text-xs text-muted-foreground font-mono">/ users/{user?.username || 'guest'}/quizzes</span>
           </div>
           <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">
-            Saved Assessments Library
+            Saved Quizzes
           </h1>
           <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
             {user ? (
               <span>
-                Synced with Cloud Firestore for <strong className="text-foreground">@{user.username}</strong>
+                Synced to your account (<strong className="text-foreground">@{user.username}</strong>)
                 {lastSyncTime && (
                   <span className="text-[11px] opacity-75 font-mono ml-2">
-                    (Aligned: {new Date(lastSyncTime).toLocaleTimeString()})
+                    • Last synced {new Date(lastSyncTime).toLocaleTimeString()}
                   </span>
                 )}
               </span>
             ) : (
-              'Stored in local browser storage (Sign in to sync with Cloud Firestore across devices)'
+              'Saved locally on this device. Sign in to sync across all your devices.'
             )}
           </p>
         </div>
@@ -94,8 +91,8 @@ export function LibraryView() {
               size="sm"
               disabled={isSyncing}
               onClick={() => syncLibraryWithCloud(false)}
-              className="h-8 text-xs font-mono gap-1.5 border-border/70 shrink-0"
-              title="Align and reconcile library with Cloud Firestore"
+              className="h-8 text-xs gap-1.5 border-border/70 shrink-0"
+              title="Sync quizzes with cloud"
             >
               <RefreshCw className={cn('w-3.5 h-3.5 text-primary', isSyncing && 'animate-spin')} />
               <span>{isSyncing ? 'Syncing...' : 'Sync Cloud'}</span>
@@ -110,7 +107,7 @@ export function LibraryView() {
               placeholder="Search saved quizzes..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="h-8 pl-8 text-xs bg-background font-mono"
+              className="h-8 pl-8 text-xs bg-background"
             />
           </div>
         </div>
@@ -123,16 +120,16 @@ export function LibraryView() {
             <BookmarkCheck className="w-5 h-5" />
           </div>
           <h3 className="text-sm font-semibold text-foreground">
-            {searchQuery ? 'No matching assessments found' : 'No assessments in your library yet'}
+            {searchQuery ? 'No matching quizzes found' : 'No quizzes in your library yet'}
           </h3>
           <p className="text-xs text-muted-foreground max-w-sm mx-auto">
             {searchQuery
-              ? 'Try adjusting your search query keyword.'
-              : 'Generate an assessment with AI or import questions through the JSON Studio.'}
+              ? 'Try searching with a different keyword.'
+              : 'Create a new quiz with AI or import questions using Custom JSON.'}
           </p>
           {!searchQuery && (
-            <Button size="sm" onClick={() => setView('home')} className="h-8 text-xs font-mono">
-              Generate New Assessment
+            <Button size="sm" onClick={() => setView('home')} className="h-8 text-xs">
+              Create New Quiz
             </Button>
           )}
         </div>
@@ -153,9 +150,9 @@ export function LibraryView() {
                   </Badge>
                 </div>
 
-                <div className="flex items-center gap-3 text-xs text-muted-foreground font-mono mt-2">
+                <div className="flex items-center gap-3 text-xs text-muted-foreground mt-2">
                   <span className="flex items-center gap-1">
-                    <Layers className="w-3 h-3 text-primary" /> Multiple Choice
+                    <Layers className="w-3 h-3 text-primary" /> Practice Quiz
                   </span>
                   {quiz.createdAt && (
                     <span className="flex items-center gap-1">
@@ -172,18 +169,18 @@ export function LibraryView() {
                   <Button
                     size="sm"
                     onClick={() => startQuiz(quiz)}
-                    className="h-7 text-xs font-mono bg-primary text-primary-foreground gap-1 px-2.5"
+                    className="h-7 text-xs bg-primary text-primary-foreground gap-1 px-3 font-medium"
                   >
                     <Play className="w-3 h-3 fill-current" />
-                    <span>Launch</span>
+                    <span>Start Quiz</span>
                   </Button>
 
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={() => handleEditJson(quiz)}
-                    className="h-7 text-xs font-mono border-border/60 gap-1 px-2.5"
-                    title="Inspect & Edit in JSON Studio"
+                    className="h-7 text-xs border-border/60 gap-1 px-2.5"
+                    title="View or Edit JSON"
                   >
                     <FileCode2 className="w-3 h-3 text-primary" />
                     <span>JSON</span>
@@ -194,7 +191,7 @@ export function LibraryView() {
                   variant="ghost"
                   size="sm"
                   onClick={() => setQuizToDelete(quiz)}
-                  className="h-7 w-7 p-0 text-muted-foreground hover:text-rose-400 hover:bg-rose-950/20"
+                  className="h-7 w-7 p-0 text-muted-foreground hover:text-rose-500 hover:bg-rose-500/10"
                   title="Delete Quiz"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
@@ -210,14 +207,14 @@ export function LibraryView() {
         <AlertDialogContent className="bg-card border-border text-foreground">
           <AlertDialogHeader>
             <AlertDialogTitle className="text-base font-semibold">
-              Delete Assessment from Library?
+              Delete Quiz from Library?
             </AlertDialogTitle>
             <AlertDialogDescription className="text-xs text-muted-foreground">
               Are you sure you want to delete &quot;{quizToDelete?.title}&quot;? This cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel className="text-xs font-mono">Cancel</AlertDialogCancel>
+            <AlertDialogCancel className="text-xs">Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => {
                 if (quizToDelete) {
@@ -225,7 +222,7 @@ export function LibraryView() {
                   setQuizToDelete(null);
                 }
               }}
-              className="bg-rose-600 hover:bg-rose-700 text-white text-xs font-mono"
+              className="bg-rose-600 hover:bg-rose-700 text-white text-xs"
             >
               Confirm Delete
             </AlertDialogAction>

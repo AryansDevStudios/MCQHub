@@ -15,8 +15,6 @@ import {
   RotateCcw,
   Sparkles,
   BookmarkCheck,
-  ChevronRight,
-  FileText,
   Loader2,
   Lightbulb,
 } from 'lucide-react';
@@ -45,9 +43,9 @@ export function ResultsView() {
   if (!currentQuiz || !currentQuiz.questions) {
     return (
       <div className="max-w-md mx-auto py-16 px-4 text-center space-y-4">
-        <h2 className="text-base font-semibold">No assessment results available.</h2>
+        <h2 className="text-base font-semibold">No quiz results available.</h2>
         <Button onClick={() => setView('home')} size="sm">
-          Return to Studio
+          Return to Quiz Creator
         </Button>
       </div>
     );
@@ -71,10 +69,10 @@ export function ResultsView() {
   ];
 
   const getTierFeedback = (pct: number) => {
-    if (pct === 100) return { title: 'Flawless Mastery', desc: 'Outstanding accuracy across every single concept.' };
-    if (pct >= 80) return { title: 'High Proficiency', desc: 'Solid conceptual understanding with minor edge cases.' };
-    if (pct >= 50) return { title: 'Competent Progress', desc: 'Good grasp of the basics; review highlighted explanations.' };
-    return { title: 'Formative Practice Needed', desc: 'Review the step-by-step proofs and retake the assessment.' };
+    if (pct === 100) return { title: 'Perfect Score!', desc: 'Outstanding accuracy across every single concept.' };
+    if (pct >= 80) return { title: 'Great Job!', desc: 'Solid conceptual understanding with only minor mistakes.' };
+    if (pct >= 50) return { title: 'Good Effort!', desc: 'Good grasp of the basics. Review the highlighted explanations below.' };
+    return { title: 'Keep Practicing!', desc: 'Take a close look at the explanations below and try retaking the quiz.' };
   };
 
   const tier = getTierFeedback(percentage);
@@ -102,12 +100,12 @@ export function ResultsView() {
 
       if (res.success && res.data) {
         setAiSummary(res.data);
-        addToast('AI Diagnostic assessment synthesized', 'success');
+        addToast('Study advice generated successfully!', 'success');
       } else {
-        addToast(res.error || 'Failed to generate diagnostic report', 'error');
+        addToast(res.error || 'Failed to generate study advice', 'error');
       }
     } catch (err: any) {
-      addToast(err?.message || 'Error creating AI summary', 'error');
+      addToast(err?.message || 'Error creating study advice', 'error');
     } finally {
       setIsGeneratingSummary(false);
     }
@@ -120,10 +118,9 @@ export function ResultsView() {
       <div className="border-b border-border/80 pb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <Badge variant="outline" className="font-mono text-[11px] py-0 px-1.5 text-emerald-400 border-emerald-500/30">
-              Diagnostic Complete
+            <Badge variant="outline" className="text-xs py-0.5 px-2 text-emerald-500 border-emerald-500/30">
+              Quiz Completed
             </Badge>
-            <span className="text-xs text-muted-foreground font-mono">/ results.log</span>
           </div>
           <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">
             {currentQuiz.title}
@@ -135,20 +132,20 @@ export function ResultsView() {
             variant="outline"
             size="sm"
             onClick={retryQuiz}
-            className="h-8 text-xs font-mono border-border/70 gap-1.5"
+            className="h-8 text-xs border-border/70 gap-1.5"
           >
             <RotateCcw className="w-3.5 h-3.5 text-primary" />
-            <span>Retake Exam</span>
+            <span>Retake Quiz</span>
           </Button>
 
           <Button
             variant="outline"
             size="sm"
             onClick={() => saveQuizToLibrary(currentQuiz)}
-            className="h-8 text-xs font-mono border-border/70 gap-1.5"
+            className="h-8 text-xs border-border/70 gap-1.5"
           >
             <BookmarkCheck className="w-3.5 h-3.5" />
-            <span>Save Quiz</span>
+            <span>Save to Library</span>
           </Button>
         </div>
       </div>
@@ -187,9 +184,9 @@ export function ResultsView() {
         {/* Qualitative Feedback Card */}
         <div className="md:col-span-2 rounded-lg border border-border bg-card p-4 sm:p-5 flex flex-col justify-between shadow-xs">
           <div>
-            <div className="flex items-center gap-2 text-xs font-mono text-muted-foreground mb-1">
-              <Trophy className="w-4 h-4 text-amber-400" />
-              <span>Diagnostic Tier</span>
+            <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
+              <Trophy className="w-4 h-4 text-amber-500" />
+              <span>Your Performance</span>
             </div>
             <h3 className="text-lg font-bold text-foreground">{tier.title}</h3>
             <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
@@ -197,27 +194,27 @@ export function ResultsView() {
             </p>
           </div>
 
-          <div className="grid grid-cols-3 gap-2 pt-3 border-t border-border/50 text-xs font-mono">
+          <div className="grid grid-cols-3 gap-2 pt-3 border-t border-border/50 text-xs">
             <div className="p-2 rounded bg-muted/30 border border-border/40">
               <div className="text-muted-foreground text-[10px] flex items-center gap-1">
-                <CheckCircle2 className="w-3 h-3 text-emerald-400" /> Correct
+                <CheckCircle2 className="w-3 h-3 text-emerald-500" /> Correct
               </div>
               <div className="font-bold text-sm text-foreground mt-0.5">{correctCount} / {totalCount}</div>
             </div>
 
             <div className="p-2 rounded bg-muted/30 border border-border/40">
               <div className="text-muted-foreground text-[10px] flex items-center gap-1">
-                <XCircle className="w-3 h-3 text-rose-400" /> Mistakes
+                <XCircle className="w-3 h-3 text-rose-500" /> Mistakes
               </div>
               <div className="font-bold text-sm text-foreground mt-0.5">{wrongCount}</div>
             </div>
 
             <div className="p-2 rounded bg-muted/30 border border-border/40">
               <div className="text-muted-foreground text-[10px] flex items-center gap-1">
-                <Clock className="w-3 h-3 text-sky-400" /> Duration
+                <Clock className="w-3 h-3 text-primary" /> Time Spent
               </div>
               <div className="font-bold text-sm text-foreground mt-0.5">
-                {latestAttempt?.timeSpent || 'Complete'}
+                {latestAttempt?.timeSpent || 'Finished'}
               </div>
             </div>
           </div>
@@ -225,13 +222,13 @@ export function ResultsView() {
 
       </div>
 
-      {/* AI Diagnostic Summarizer Section */}
-      <div className="rounded-lg border border-sky-500/30 bg-sky-950/15 p-4 sm:p-5 space-y-3">
+      {/* AI Study Advice Section */}
+      <div className="rounded-lg border border-primary/25 bg-primary/5 p-4 sm:p-5 space-y-3">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
           <div className="flex items-center gap-2">
-            <Sparkles className="w-4 h-4 text-sky-400" />
-            <h3 className="text-xs font-semibold font-mono text-foreground uppercase tracking-wider">
-              Generative Tutor Feedback
+            <Sparkles className="w-4 h-4 text-primary" />
+            <h3 className="text-sm font-semibold text-foreground">
+              Personalized Study Tips & Review
             </h3>
           </div>
 
@@ -240,17 +237,17 @@ export function ResultsView() {
               size="sm"
               disabled={isGeneratingSummary}
               onClick={handleRequestAiSummary}
-              className="h-7 text-xs font-mono bg-sky-500 hover:bg-sky-600 text-black px-3"
+              className="h-8 text-xs bg-primary hover:bg-primary/90 text-primary-foreground px-3 gap-1.5 font-medium"
             >
               {isGeneratingSummary ? (
                 <>
-                  <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
-                  Analyzing Exam Data...
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  Analyzing Answers...
                 </>
               ) : (
                 <>
-                  <Lightbulb className="w-3.5 h-3.5 mr-1.5" />
-                  Synthesize Tutor Analysis
+                  <Lightbulb className="w-3.5 h-3.5" />
+                  Get Study Advice
                 </>
               )}
             </Button>
@@ -258,24 +255,24 @@ export function ResultsView() {
         </div>
 
         {aiSummary ? (
-          <div className="text-xs sm:text-sm text-foreground leading-relaxed pt-2 border-t border-sky-500/20">
+          <div className="text-xs sm:text-sm text-foreground leading-relaxed pt-2 border-t border-primary/20">
             <MarkdownRenderer content={aiSummary} />
           </div>
         ) : (
           <p className="text-xs text-muted-foreground">
-            Activate the AI diagnostic engine to evaluate your specific answer patterns and get targeted topic recommendations.
+            Click <strong>Get Study Advice</strong> to analyze your answers and receive personalized recommendations for concepts you should review.
           </p>
         )}
       </div>
 
-      {/* Detailed Question Review List */}
+      {/* Question Review List */}
       <div className="space-y-3 pt-2">
         <div className="flex items-center justify-between">
-          <h3 className="text-sm font-semibold font-mono text-foreground uppercase tracking-wider">
-            Detailed Solution Breakdown
+          <h3 className="text-sm font-semibold text-foreground">
+            Question Review
           </h3>
-          <span className="text-xs text-muted-foreground font-mono">
-            {totalCount} Questions Evaluated
+          <span className="text-xs text-muted-foreground">
+            {totalCount} Questions
           </span>
         </div>
 
@@ -291,15 +288,15 @@ export function ResultsView() {
                 className={`rounded-lg border p-4 space-y-3 transition-colors ${
                   isCorrect
                     ? 'border-border/70 bg-card'
-                    : 'border-rose-500/30 bg-rose-950/10'
+                    : 'border-rose-500/25 bg-rose-500/5'
                 }`}
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-start gap-2">
                     <Badge
                       variant="outline"
-                      className={`font-mono text-[10px] shrink-0 mt-0.5 ${
-                        isCorrect ? 'text-emerald-400 border-emerald-500/30' : 'text-rose-400 border-rose-500/30'
+                      className={`text-[10px] shrink-0 mt-0.5 ${
+                        isCorrect ? 'text-emerald-500 border-emerald-500/30' : 'text-rose-500 border-rose-500/30'
                       }`}
                     >
                       Q{idx + 1}
@@ -311,11 +308,11 @@ export function ResultsView() {
 
                   <div className="shrink-0">
                     {isCorrect ? (
-                      <span className="flex items-center gap-1 text-[11px] font-mono text-emerald-400">
+                      <span className="flex items-center gap-1 text-xs text-emerald-500 font-medium">
                         <CheckCircle2 className="w-3.5 h-3.5" /> Correct
                       </span>
                     ) : (
-                      <span className="flex items-center gap-1 text-[11px] font-mono text-rose-400">
+                      <span className="flex items-center gap-1 text-xs text-rose-500 font-medium">
                         <XCircle className="w-3.5 h-3.5" /> Incorrect
                       </span>
                     )}
@@ -323,25 +320,25 @@ export function ResultsView() {
                 </div>
 
                 {/* Answers Comparison */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs font-mono pt-1">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs pt-1">
                   <div className={`p-2.5 rounded border ${
                     isCorrect
-                      ? 'bg-emerald-950/20 border-emerald-500/40 text-emerald-200'
-                      : 'bg-rose-950/20 border-rose-500/40 text-rose-200'
+                      ? 'bg-emerald-500/10 border-emerald-500/30 text-foreground'
+                      : 'bg-rose-500/10 border-rose-500/30 text-foreground'
                   }`}>
-                    <div className="text-[10px] text-muted-foreground uppercase">Your Choice:</div>
+                    <div className="text-[10px] text-muted-foreground uppercase font-medium">Your Choice:</div>
                     <div className="mt-0.5">
                       {userChoice !== undefined ? (
                         <MarkdownRenderer content={q.options[userChoice]} />
                       ) : (
-                        <span className="italic opacity-60">Skipped</span>
+                        <span className="italic text-muted-foreground">Skipped</span>
                       )}
                     </div>
                   </div>
 
                   {!isCorrect && (
-                    <div className="p-2.5 rounded bg-emerald-950/20 border border-emerald-500/40 text-emerald-200">
-                      <div className="text-[10px] text-emerald-400 uppercase">Correct Solution:</div>
+                    <div className="p-2.5 rounded bg-emerald-500/10 border border-emerald-500/30 text-foreground">
+                      <div className="text-[10px] text-emerald-600 dark:text-emerald-400 uppercase font-medium">Correct Answer:</div>
                       <div className="mt-0.5">
                         <MarkdownRenderer content={q.options[q.correctAnswer]} />
                       </div>
@@ -351,18 +348,18 @@ export function ResultsView() {
 
                 {/* Explanation */}
                 {q.explanation && (
-                  <div className="p-2.5 rounded bg-muted/30 border border-border/40 text-xs text-muted-foreground space-y-1">
-                    <span className="font-semibold text-foreground text-[11px] font-mono">Proof & Reasoning:</span>
+                  <div className="p-2.5 rounded bg-muted/40 border border-border/40 text-xs text-muted-foreground space-y-1">
+                    <span className="font-semibold text-foreground text-[11px]">Explanation:</span>
                     <div className="leading-relaxed text-foreground/90">
                       <MarkdownRenderer content={q.explanation} />
                     </div>
                   </div>
                 )}
 
-                {/* Notes Recall */}
+                {/* User Note */}
                 {note && (
-                  <div className="p-2 rounded bg-amber-950/20 border border-amber-800/40 text-xs text-amber-200/90 font-mono">
-                    <span className="text-[10px] text-amber-400 uppercase block mb-0.5">Scratchpad Note:</span>
+                  <div className="p-2 rounded bg-amber-500/10 border border-amber-500/30 text-xs text-foreground">
+                    <span className="text-[10px] text-amber-600 dark:text-amber-400 uppercase font-semibold block mb-0.5">Your Note:</span>
                     {note}
                   </div>
                 )}
