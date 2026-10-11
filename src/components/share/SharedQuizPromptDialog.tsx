@@ -56,11 +56,23 @@ export function SharedQuizPromptDialog() {
               </Badge>
             </div>
 
-            <div className="flex items-center gap-3 text-xs text-muted-foreground pt-1 border-t border-border/40">
+            <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground pt-1 border-t border-border/40">
               <span className="flex items-center gap-1">
                 <UserCheck className="w-3.5 h-3.5 text-primary" />
-                <span>Shared by: <strong>{createdBy ? `@${createdBy}` : 'Collaborator'}</strong></span>
+                <span>Original Creator: <strong>{createdBy ? `@${createdBy}` : 'Collaborator'}</strong></span>
               </span>
+              {pendingSharedQuiz.createdAt && (
+                <>
+                  <span>•</span>
+                  <span>Created: {new Date(pendingSharedQuiz.createdAt).toLocaleDateString()}</span>
+                </>
+              )}
+              {pendingSharedQuiz.shareId && (
+                <>
+                  <span>•</span>
+                  <span className="font-mono font-bold text-emerald-500">#{pendingSharedQuiz.shareId}</span>
+                </>
+              )}
             </div>
           </div>
 

@@ -220,7 +220,13 @@ Respond directly in clean Markdown.`;
 export async function createSharedQuizAction(
   quiz: Quiz,
   createdBy?: string
-): Promise<{ success: boolean; shareId?: string; error?: string }> {
+): Promise<{
+  success: boolean;
+  shareId?: string;
+  createdBy?: string;
+  createdAt?: string;
+  error?: string;
+}> {
   try {
     const res = await fetch(`${CF_WORKER_URL}/api/share/create`, {
       method: 'POST',
@@ -230,7 +236,12 @@ export async function createSharedQuizAction(
 
     const data = await res.json();
     if (res.ok && data.success) {
-      return { success: true, shareId: data.shareId };
+      return {
+        success: true,
+        shareId: data.shareId,
+        createdBy: data.createdBy,
+        createdAt: data.createdAt,
+      };
     }
     return { success: false, error: data.error || 'Failed to generate share link' };
   } catch (err: any) {

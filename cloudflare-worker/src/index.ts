@@ -430,7 +430,7 @@ export default {
         });
       }
 
-      // 7c. Share Quiz: Create Shareable Assessment in Firestore
+      // 7c. Share Quiz: Create Shareable Assessment in Firestore (5-Digit Code & Immutable Original Creator)
       if (url.pathname === '/api/share/create' && request.method === 'POST') {
         const body = (await request.json()) as any;
         const { quiz, createdBy } = body;
@@ -438,48 +438,108 @@ export default {
           return jsonResponse({ success: false, error: 'Valid quiz with questions is required' }, 400);
         }
 
-        const shareId = quiz.id
-          ? quiz.id.toString().replace(/[^a-zA-Z0-9_-]/g, '_')
-          : `mcq_${Math.random().toString(36).substring(2, 9)}`;
+        // Determine 5-digit numeric share ID
+        let finalShareId: string | null = null;
+        const providedShareId = (quiz.shareId || '').toString().trim();
 
-        const now = new Date().toISOString();
+        // 1. If this quiz was already shared or imported with a 5-digit code, reuse the exact existing one!
+        if (providedShareId && /^\d{5}$/.test(providedShareId)) {
+          finalShareId = providedShareId;
+          const existingDoc = await getFirestoreDoc(env, `shared_quizzes/${finalShareId}`);
+          if (existingDoc) {
+            const data = parseDocFields(existingDoc);
+            const origCreator = data.originalCreator || data.createdBy || quiz.originalCreator || quiz.createdBy || 'Anonymous';
+            const origCreatedAt = data.createdAt || quiz.createdAt || new Date().toISOString();
+            return jsonResponse({
+              success: true,
+              shareId: finalShareId,
+              createdBy: origCreator,
+              originalCreator: origCreator,
+              createdAt: origCreatedAt,
+            });
+          }
+        }
+
+        // 2. Otherwise generate a clean 5-digit random numeric PIN (10000 - 99999)
+        let attempts = 0;
+        while (!finalShareId && attempts < 10) {
+          const candidate = Math.floor(10000 + Math.random() * 90000).toString();
+          const doc = await getFirestoreDoc(env, `shared_quizzes/${candidate}`);
+          if (!doc) {
+            finalShareId = candidate;
+          }
+          attempts++;
+        }
+        if (!finalShareId) {
+          finalShareId = Math.floor(10000 + Math.random() * 90000).toString();
+        }
+
+        // Preserve the original creator and original creation timestamp
+        const originalCreator = quiz.originalCreator || quiz.createdBy || createdBy || 'Anonymous';
+        const originalCreatedAt = quiz.createdAt || new Date().toISOString();
+
+        const payloadQuiz = {
+          ...quiz,
+          shareId: finalShareId,
+          createdBy: originalCreator,
+          originalCreator,
+          createdAt: originalCreatedAt,
+        };
+
         await patchFirestoreDoc(
           env,
-          `shared_quizzes/${shareId}`,
+          `shared_quizzes/${finalShareId}`,
           {
-            shareId,
-            quiz,
-            createdBy: createdBy || 'anonymous',
-            createdAt: now,
+            shareId: finalShareId,
+            quiz: payloadQuiz,
+            createdBy: originalCreator,
+            originalCreator,
+            createdAt: originalCreatedAt,
           }
         );
 
         return jsonResponse({
           success: true,
-          shareId,
+          shareId: finalShareId,
+          createdBy: originalCreator,
+          originalCreator,
+          createdAt: originalCreatedAt,
         });
       }
 
       // 7d. Share Quiz: Retrieve Shared Assessment from Firestore
       if (url.pathname === '/api/share/get' && request.method === 'GET') {
         const id = url.searchParams.get('id') || '';
-        const cleanId = id.trim().replace(/[^a-zA-Z0-9_-]/g, '_');
+        // Extract 5-digit code or clean string
+        const cleanId = id.trim().replace(/[^a-zA-Z0-9_-]/g, '');
         if (!cleanId) {
-          return jsonResponse({ success: false, error: 'Share ID is required' }, 400);
+          return jsonResponse({ success: false, error: '5-digit Share Code is required' }, 400);
         }
 
         const doc = await getFirestoreDoc(env, `shared_quizzes/${cleanId}`);
         if (!doc) {
-          return jsonResponse({ success: false, error: 'Shared assessment not found or link has expired.' }, 404);
+          return jsonResponse({ success: false, error: 'Shared assessment not found. Please verify the 5-digit code.' }, 404);
         }
 
         const data = parseDocFields(doc);
+        const originalCreator = data.originalCreator || data.createdBy || (data.quiz && (data.quiz.originalCreator || data.quiz.createdBy)) || 'Anonymous';
+        const originalCreatedAt = data.createdAt || (data.quiz && data.quiz.createdAt) || new Date().toISOString();
+
+        const returnedQuiz = {
+          ...(data.quiz || {}),
+          shareId: data.shareId || cleanId,
+          createdBy: originalCreator,
+          originalCreator,
+          createdAt: originalCreatedAt,
+        };
+
         return jsonResponse({
           success: true,
           shareId: data.shareId || cleanId,
-          quiz: data.quiz,
-          createdBy: data.createdBy || 'anonymous',
-          createdAt: data.createdAt,
+          quiz: returnedQuiz,
+          createdBy: originalCreator,
+          originalCreator,
+          createdAt: originalCreatedAt,
         });
       }
 

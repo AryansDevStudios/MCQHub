@@ -26,6 +26,7 @@ import {
   RefreshCw,
   Share2,
   KeyRound,
+  User,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { Quiz } from '@/lib/types';
@@ -165,7 +166,7 @@ export function LibraryView() {
                   </Badge>
                 </div>
 
-                <div className="flex items-center gap-3 text-xs text-muted-foreground mt-2">
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground mt-2">
                   <span className="flex items-center gap-1">
                     <Layers className="w-3 h-3 text-primary" /> Practice Quiz
                   </span>
@@ -174,6 +175,17 @@ export function LibraryView() {
                       <Calendar className="w-3 h-3" />
                       {new Date(quiz.createdAt).toLocaleDateString()}
                     </span>
+                  )}
+                  {(quiz.originalCreator || quiz.createdBy) && (
+                    <span className="flex items-center gap-1 text-emerald-400/90 font-medium" title="Original Creator">
+                      <User className="w-3 h-3 text-emerald-400" />
+                      @{quiz.originalCreator || quiz.createdBy}
+                    </span>
+                  )}
+                  {quiz.shareId && (
+                    <Badge variant="outline" className="text-[10px] font-mono border-emerald-500/30 text-emerald-400 bg-emerald-500/10 px-1.5 py-0">
+                      Code: {quiz.shareId}
+                    </Badge>
                   )}
                 </div>
               </div>
@@ -206,10 +218,10 @@ export function LibraryView() {
                     size="sm"
                     onClick={() => openShareModal(quiz)}
                     className="h-7 text-xs border-border/60 gap-1 px-2.5 text-sky-400 hover:text-sky-300 hover:border-sky-500/40"
-                    title="Share Assessment"
+                    title={quiz.shareId ? `Shared Assessment (Code: ${quiz.shareId})` : "Share Assessment"}
                   >
                     <Share2 className="w-3 h-3 text-sky-400" />
-                    <span>Share</span>
+                    <span>{quiz.shareId ? `#${quiz.shareId}` : 'Share'}</span>
                   </Button>
                 </div>
 

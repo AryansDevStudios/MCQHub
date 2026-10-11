@@ -1184,21 +1184,61 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
 
     setIsSharing(true);
     try {
-      const res = await createSharedQuizAction(quiz, user?.displayName || user?.username);
+      const origCreator = quiz.originalCreator || quiz.createdBy || user?.displayName || user?.username || 'Anonymous';
+      const origCreatedAt = quiz.createdAt || new Date().toISOString();
+
+      const quizToShare: Quiz = {
+        ...quiz,
+        shareId: quiz.shareId,
+        originalCreator: origCreator,
+        createdBy: origCreator,
+        createdAt: origCreatedAt,
+      };
+
+      const res = await createSharedQuizAction(quizToShare, origCreator);
       if (res.success && res.shareId) {
         const origin = typeof window !== 'undefined' ? window.location.origin : 'https://mcqhub.pages.dev';
         const shareUrl = `${origin}/?share=${res.shareId}`;
+        
+        const finalQuiz: Quiz = {
+          ...quizToShare,
+          shareId: res.shareId,
+          originalCreator: res.createdBy || origCreator,
+          createdBy: res.createdBy || origCreator,
+          createdAt: res.createdAt || origCreatedAt,
+        };
+
         setActiveShareData({
-          quiz,
+          quiz: finalQuiz,
           shareId: res.shareId,
           shareUrl,
         });
+
+        // Permanently attach the 5-digit shareId and original creator to this quiz in local library
+        setSavedQuizzes((prev) => {
+          const updated = prev.map((q) =>
+            (q.id && q.id === quiz.id) || q.title === quiz.title
+              ? {
+                  ...q,
+                  shareId: res.shareId,
+                  originalCreator: finalQuiz.originalCreator,
+                  createdBy: finalQuiz.createdBy,
+                  createdAt: finalQuiz.createdAt,
+                }
+              : q
+          );
+          try {
+            localStorage.setItem(STORAGE_KEYS.LOCAL_QUIZZES, JSON.stringify(updated));
+          } catch {}
+          return updated;
+        });
+
         setShareModalOpen(true);
         if (typeof navigator !== 'undefined' && navigator.clipboard) {
           navigator.clipboard.writeText(shareUrl).then(() => {
-            addToast('Share link created & copied to clipboard!', 'success');
+            addToast(`Share Code ${res.shareId} & link copied to clipboard!`, 'success');
           }).catch(() => {
-            addToast('Share link created successfully!', 'success');
+            addToast(`Share Code ${res.shareId} created successfully!`, 'success');
           });
         }
       } else {
@@ -1220,7 +1260,7 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
     }
 
     if (!cleanId) {
-      addToast('Please enter a valid Share Code or Link', 'error');
+      addToast('Please enter a valid 5-digit Share Code or Link', 'error');
       return false;
     }
 
@@ -1228,17 +1268,28 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
     try {
       const res = await getSharedQuizAction(cleanId);
       if (res.success && res.quiz) {
+        const originalCreator = res.createdBy || res.quiz.originalCreator || res.quiz.createdBy || 'Anonymous';
+        const originalCreatedAt = res.createdAt || res.quiz.createdAt || new Date().toISOString();
+
+        const loadedQuiz: Quiz = {
+          ...res.quiz,
+          shareId: res.shareId || cleanId,
+          originalCreator,
+          createdBy: originalCreator,
+          createdAt: originalCreatedAt,
+        };
+
         setPendingSharedQuiz({
           shareId: res.shareId || cleanId,
-          quiz: res.quiz,
-          createdBy: res.createdBy,
-          createdAt: res.createdAt,
+          quiz: loadedQuiz,
+          createdBy: originalCreator,
+          createdAt: originalCreatedAt,
         });
         setJoinModalOpen(false);
-        addToast(`Loaded shared assessment: "${res.quiz.title}"`, 'success');
+        addToast(`Loaded assessment #${res.shareId || cleanId}: "${res.quiz.title}"`, 'success');
         return true;
       } else {
-        addToast(res.error || 'Assessment not found. Please verify the code.', 'error');
+        addToast(res.error || 'Assessment not found. Please verify the 5-digit code.', 'error');
         return false;
       }
     } catch (err: any) {
@@ -1251,7 +1302,16 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
 
   const acceptPendingSharedQuiz = (startImmediately: boolean, saveToLib: boolean) => {
     if (!pendingSharedQuiz) return;
-    const targetQuiz = pendingSharedQuiz.quiz;
+    const originalCreator = pendingSharedQuiz.createdBy || pendingSharedQuiz.quiz.originalCreator || pendingSharedQuiz.quiz.createdBy || 'Anonymous';
+    const originalCreatedAt = pendingSharedQuiz.createdAt || pendingSharedQuiz.quiz.createdAt || new Date().toISOString();
+
+    const targetQuiz: Quiz = {
+      ...pendingSharedQuiz.quiz,
+      shareId: pendingSharedQuiz.shareId,
+      originalCreator,
+      createdBy: originalCreator,
+      createdAt: originalCreatedAt,
+    };
 
     if (saveToLib) {
       saveQuizToLibrary(targetQuiz);

@@ -10,6 +10,9 @@ export interface Quiz {
   title: string;
   questions: Question[];
   createdAt?: string;
+  shareId?: string;
+  createdBy?: string;
+  originalCreator?: string;
 }
 
 export interface QuizAttempt {

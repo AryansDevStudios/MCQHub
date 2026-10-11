@@ -39,7 +39,7 @@ export function JoinQuizDialog() {
             <div>
               <DialogTitle className="text-base font-bold">Open Shared Assessment</DialogTitle>
               <DialogDescription className="text-xs text-muted-foreground">
-                Enter a Share Code or paste a direct shared assessment link.
+                Enter the 5-digit code or paste a direct shared assessment link.
               </DialogDescription>
             </div>
           </div>
@@ -48,15 +48,15 @@ export function JoinQuizDialog() {
         <form onSubmit={handleSubmit} className="space-y-4 pt-2">
           <div className="space-y-1.5">
             <Label className="text-xs font-semibold text-foreground flex items-center justify-between">
-              <span>Share Code or Link</span>
-              <span className="text-[11px] text-muted-foreground font-normal">e.g. mcq_eazjivn</span>
+              <span>5-Digit Code or Link</span>
+              <span className="text-[11px] text-muted-foreground font-normal">e.g. 58291</span>
             </Label>
             <Input
               type="text"
-              placeholder="Paste link or type code here..."
+              placeholder="Enter 5-digit code (e.g. 58291) or paste link..."
               value={codeOrUrl}
               onChange={(e) => setCodeOrUrl(e.target.value)}
-              className="h-9 text-xs sm:text-sm bg-background font-mono"
+              className="h-9 text-xs sm:text-sm bg-background font-mono tracking-wider"
               autoFocus
               required
             />
