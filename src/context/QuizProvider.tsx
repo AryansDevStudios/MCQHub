@@ -131,13 +131,69 @@ const STORAGE_KEYS = {
   SYNC_AI_SETTING: 'mcqhub_sync_ai_setting',
 };
 
+export const getPathForView = (v: ViewState): string => {
+  switch (v) {
+    case 'editor':
+      return '/editor';
+    case 'library':
+      return '/library';
+    case 'history':
+      return '/history';
+    case 'quiz':
+      return '/quiz';
+    case 'results':
+      return '/results';
+    case 'home':
+    default:
+      return '/';
+  }
+};
+
+export const getViewForPath = (path: string): ViewState => {
+  const clean = (path || '/').replace(/\/$/, '') || '/';
+  if (clean === '/library') return 'library';
+  if (clean === '/history') return 'history';
+  if (clean === '/editor') return 'editor';
+  if (clean === '/quiz') return 'quiz';
+  if (clean === '/results') return 'results';
+  return 'home';
+};
+
 export function QuizProvider({ children }: { children: React.ReactNode }) {
-  const [view, setViewState] = useState<ViewState>('home');
+  // Sync view state directly from URL pathname on initial load
+  const [view, setViewState] = useState<ViewState>(() => {
+    if (typeof window !== 'undefined') {
+      const pathView = getViewForPath(window.location.pathname);
+      const cachedExam = localStorage.getItem(STORAGE_KEYS.ACTIVE_EXAM);
+      if (pathView === 'quiz' && cachedExam) return 'quiz';
+      return pathView;
+    }
+    return 'home';
+  });
+
   const [theme, setTheme] = useState<'light' | 'dark'>('dark');
 
-  // Auth & Firestore state
-  const [user, setUser] = useState<UserProfile | null>(null);
-  const [activeSession, setActiveSession] = useState<UserSession | null>(null);
+  // Auth & Firestore state with instant local hydration
+  const [user, setUser] = useState<UserProfile | null>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEYS.USER);
+        if (raw) return JSON.parse(raw);
+      } catch {}
+    }
+    return null;
+  });
+
+  const [activeSession, setActiveSession] = useState<UserSession | null>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEYS.SESSION);
+        if (raw) return JSON.parse(raw);
+      } catch {}
+    }
+    return null;
+  });
+
   const [isAuthLoading, setIsAuthLoading] = useState<boolean>(false);
   const [heuristicStatus, setHeuristicStatus] = useState<HeuristicStatus | null>(null);
   const [isCheckingHeuristic, setIsCheckingHeuristic] = useState<boolean>(false);
@@ -146,25 +202,159 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
   const [lastSyncTime, setLastSyncTime] = useState<string | null>(null);
 
-  // Collections
-  const [savedQuizzes, setSavedQuizzes] = useState<Quiz[]>([]);
-  const [history, setHistory] = useState<QuizAttempt[]>([]);
+  // Collections (0ms instantaneous local hydration)
+  const [savedQuizzes, setSavedQuizzes] = useState<Quiz[]>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEYS.LOCAL_QUIZZES);
+        if (raw) return JSON.parse(raw);
+      } catch {}
+    }
+    return [];
+  });
 
-  // Active Exam state
-  const [activeQuiz, setActiveQuiz] = useState<Quiz | null>(null);
-  const [userAnswers, setUserAnswers] = useState<Record<number, number>>({});
-  const [questionNotes, setQuestionNotes] = useState<Record<number, string>>({});
-  const [currentQuestionIndex, setCurrentQuestionIndex] = useState<number>(0);
-  const [isInstantMode, setIsInstantMode] = useState<boolean>(false);
-  const [checkedQuestions, setCheckedQuestions] = useState<Record<number, boolean>>({});
-  const [elapsedSeconds, setElapsedSeconds] = useState<number>(0);
-  const [elapsedMs, setElapsedMs] = useState<number>(0);
+  const [history, setHistory] = useState<QuizAttempt[]>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEYS.LOCAL_HISTORY);
+        if (raw) return JSON.parse(raw);
+      } catch {}
+    }
+    return [];
+  });
+
+  // Active Exam state (instant local hydration so refresh retains 100% test progress)
+  const [activeExamSession, setActiveExamSession] = useState<ActiveExamSession | null>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEYS.ACTIVE_EXAM);
+        if (raw) return JSON.parse(raw);
+      } catch {}
+    }
+    return null;
+  });
+
+  const [activeQuiz, setActiveQuiz] = useState<Quiz | null>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEYS.ACTIVE_EXAM);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          return parsed.quiz || null;
+        }
+      } catch {}
+    }
+    return null;
+  });
+
+  const [userAnswers, setUserAnswers] = useState<Record<number, number>>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEYS.ACTIVE_EXAM);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          return parsed.userAnswers || {};
+        }
+      } catch {}
+    }
+    return {};
+  });
+
+  const [questionNotes, setQuestionNotes] = useState<Record<number, string>>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEYS.ACTIVE_EXAM);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          return parsed.questionNotes || {};
+        }
+      } catch {}
+    }
+    return {};
+  });
+
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState<number>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEYS.ACTIVE_EXAM);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          return parsed.currentQuestionIndex || 0;
+        }
+      } catch {}
+    }
+    return 0;
+  });
+
+  const [isInstantMode, setIsInstantMode] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEYS.ACTIVE_EXAM);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          return !!parsed.isInstantMode;
+        }
+      } catch {}
+    }
+    return false;
+  });
+
+  const [checkedQuestions, setCheckedQuestions] = useState<Record<number, boolean>>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEYS.ACTIVE_EXAM);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          return parsed.checkedQuestions || {};
+        }
+      } catch {}
+    }
+    return {};
+  });
+
+  const [elapsedMs, setElapsedMs] = useState<number>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEYS.ACTIVE_EXAM);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          return parsed.elapsedMs || (parsed.elapsedSeconds ? parsed.elapsedSeconds * 1000 : 0);
+        }
+      } catch {}
+    }
+    return 0;
+  });
+
+  const [elapsedSeconds, setElapsedSeconds] = useState<number>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEYS.ACTIVE_EXAM);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          const ms = parsed.elapsedMs || (parsed.elapsedSeconds ? parsed.elapsedSeconds * 1000 : 0);
+          return Math.floor(ms / 1000);
+        }
+      } catch {}
+    }
+    return 0;
+  });
+
   const [clockSkewMs, setClockSkewMs] = useState<number>(0);
   const [originDeviceId, setOriginDeviceId] = useState<string | null>(null);
-  const [isTimerRunning, setIsTimerRunning] = useState<boolean>(false);
 
-  // In-progress active exam session (persisted across devices)
-  const [activeExamSession, setActiveExamSession] = useState<ActiveExamSession | null>(null);
+  const [isTimerRunning, setIsTimerRunning] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEYS.ACTIVE_EXAM);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          return !!parsed.isTimerRunning;
+        }
+      } catch {}
+    }
+    return false;
+  });
+
   const activeExamSessionRef = useRef<ActiveExamSession | null>(null);
   activeExamSessionRef.current = activeExamSession;
   const clockSkewRef = useRef<number>(0);
@@ -238,7 +428,7 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
         }
       }
 
-      // Fast cloud sync if user is signed in
+      // Batched cloud sync (debounced by 2500ms to strictly prevent flooding Firebase free quota)
       if (syncExamTimerRef.current) clearTimeout(syncExamTimerRef.current);
       syncExamTimerRef.current = setTimeout(async () => {
         const currentUser = userRef.current;
@@ -252,7 +442,7 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
             isSyncingExamRef.current = false;
           }
         }
-      }, 150);
+      }, 2500);
     },
     []
   );
@@ -395,13 +585,63 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
     [user, savedQuizzes, history, addToast]
   );
 
-  // Navigation with smart sync on opening library or history
-  const setView = (newView: ViewState) => {
-    setViewState(newView);
-    if ((newView === 'library' || newView === 'history') && user) {
-      syncLibraryWithCloud(true);
-    }
-  };
+  // Navigation with browser URL deep-linking and smart cloud sync
+  const setView = useCallback(
+    (newView: ViewState) => {
+      setViewState(newView);
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.setItem('mcqhub_last_view', newView);
+          const targetPath = getPathForView(newView);
+          const currentPath = window.location.pathname.replace(/\/$/, '') || '/';
+          if (currentPath !== targetPath) {
+            window.history.pushState({ view: newView }, '', targetPath + window.location.search);
+          }
+        } catch {}
+      }
+      if ((newView === 'library' || newView === 'history') && userRef.current) {
+        syncLibraryWithCloud(true);
+      }
+    },
+    [syncLibraryWithCloud]
+  );
+
+  // Handle browser Back / Forward navigation (PopState) and beforeunload timer snapshot
+  useEffect(() => {
+    const handlePopState = () => {
+      if (typeof window !== 'undefined') {
+        const targetView = getViewForPath(window.location.pathname);
+        setViewState(targetView);
+      }
+    };
+
+    // Save exact millisecond timer snapshot before page refresh or unload (0 cloud cost)
+    const handleBeforeUnload = () => {
+      const cur = activeExamSessionRef.current;
+      if (cur && cur.isTimerRunning) {
+        const nowEpoch = Date.now() + clockSkewRef.current;
+        const startedAt = cur.startedAtMs || nowEpoch;
+        const base = cur.baseElapsedMs || 0;
+        const exactElapsed = Math.max(0, (nowEpoch - startedAt) + base);
+        const snapshot: ActiveExamSession = {
+          ...cur,
+          elapsedMs: exactElapsed,
+          elapsedSeconds: Math.floor(exactElapsed / 1000),
+          updatedAt: new Date().toISOString(),
+        };
+        try {
+          localStorage.setItem(STORAGE_KEYS.ACTIVE_EXAM, JSON.stringify(snapshot));
+        } catch {}
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, []);
 
   // 1. Initialize Theme, Local Storage, and Initial Alignment on Mount
   useEffect(() => {
@@ -440,6 +680,30 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
       if (cachedActiveExam) {
         const parsed: ActiveExamSession = JSON.parse(cachedActiveExam);
         setActiveExamSession(parsed);
+
+        const currentPath = typeof window !== 'undefined' ? window.location.pathname.replace(/\/$/, '') || '/' : '/';
+        const lastView = localStorage.getItem('mcqhub_last_view');
+
+        // If user refreshed on /quiz or was in an active quiz, restore quiz and timer immediately
+        if (currentPath === '/quiz' || lastView === 'quiz') {
+          setActiveQuiz(parsed.quiz);
+          setUserAnswers(parsed.userAnswers || {});
+          setCurrentQuestionIndex(parsed.currentQuestionIndex || 0);
+          setCheckedQuestions(parsed.checkedQuestions || {});
+          setQuestionNotes(parsed.questionNotes || {});
+          setIsInstantMode(!!parsed.isInstantMode);
+
+          const nowEpoch = Date.now() + clockSkewRef.current;
+          const elapsed = parsed.elapsedMs || (parsed.elapsedSeconds ? parsed.elapsedSeconds * 1000 : 0);
+          setElapsedMs(elapsed);
+          setElapsedSeconds(Math.floor(elapsed / 1000));
+          parsed.startedAtMs = nowEpoch - elapsed;
+          parsed.baseElapsedMs = 0;
+          parsed.isTimerRunning = true;
+          activeExamSessionRef.current = parsed;
+          setIsTimerRunning(true);
+          setViewState('quiz');
+        }
       }
     } catch (e) {
       console.warn('Error reading localStorage initial state:', e);
@@ -499,12 +763,17 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
     return () => window.removeEventListener('online', handleOnline);
   }, [user, syncLibraryWithCloud, addToast]);
 
-  // 3. Cross-Device Live Active Exam Sync Polling (every 3.5s & on window focus)
+  // 3. Cross-Device Live Active Exam Sync (Only on Visibility Change / Tab Focus with 45s Cooldown)
+  // Strictly protects Firebase free tier by eliminating high-frequency continuous polling
   useEffect(() => {
     if (!user) return;
+    let lastPullTime = 0;
 
     const pullActiveExam = async () => {
       if (!userRef.current || isSyncingExamRef.current) return;
+      const now = Date.now();
+      if (now - lastPullTime < 45000) return; // Strict 45s cooldown
+      lastPullTime = now;
       try {
         const res = await fetchActiveExamFirestore(userRef.current.username);
         if (res.clientSkewMs !== undefined) {
@@ -514,8 +783,7 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
 
         const remote = res.activeExam;
         if (!remote) {
-          // If remote was finished or discarded on another device
-          if (activeExamSessionRef.current && Date.now() - lastLocalUpdateRef.current > 4000) {
+          if (activeExamSessionRef.current && Date.now() - lastLocalUpdateRef.current > 10000) {
             setActiveExamSession(null);
             activeExamSessionRef.current = null;
             if (activeQuiz) {
@@ -531,14 +799,12 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
         }
 
         const remoteTime = new Date(remote.updatedAt).getTime();
-        // If remote was updated from another device (or on load), sync into view!
-        if (remoteTime > lastLocalUpdateRef.current + 200) {
+        if (remoteTime > lastLocalUpdateRef.current + 2000) {
           setActiveExamSession(remote);
           activeExamSessionRef.current = remote;
           if (remote.originDeviceId) setOriginDeviceId(remote.originDeviceId);
           localStorage.setItem(STORAGE_KEYS.ACTIVE_EXAM, JSON.stringify(remote));
 
-          // If the user has this quiz currently active on screen, live-update answers and progress!
           if (activeQuiz && activeQuiz.title === remote.quiz.title) {
             setUserAnswers(remote.userAnswers || {});
             setCurrentQuestionIndex(remote.currentQuestionIndex || 0);
@@ -549,13 +815,18 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
       } catch {}
     };
 
-    const interval = setInterval(pullActiveExam, 3500);
-    const handleFocus = () => pullActiveExam();
-    window.addEventListener('focus', handleFocus);
+    const handleVisibility = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        pullActiveExam();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibility);
+    window.addEventListener('focus', handleVisibility);
 
     return () => {
-      clearInterval(interval);
-      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleVisibility);
+      window.removeEventListener('focus', handleVisibility);
     };
   }, [user, activeQuiz]);
 
@@ -607,6 +878,7 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
+    let lastSnapshotPersist = Date.now();
     const tick = () => {
       const currentSession = activeExamSessionRef.current;
       if (!currentSession || !currentSession.isTimerRunning) return;
@@ -618,6 +890,16 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
 
       setElapsedMs(totalElapsed);
       setElapsedSeconds(Math.floor(totalElapsed / 1000));
+
+      // Locally snapshot the exact second & millisecond to localStorage once every second (0 network requests, 0 cloud cost)
+      if (Date.now() - lastSnapshotPersist > 1000) {
+        lastSnapshotPersist = Date.now();
+        currentSession.elapsedMs = totalElapsed;
+        currentSession.elapsedSeconds = Math.floor(totalElapsed / 1000);
+        try {
+          localStorage.setItem(STORAGE_KEYS.ACTIVE_EXAM, JSON.stringify(currentSession));
+        } catch {}
+      }
     };
 
     // Smooth 40ms interval (25 updates per second) for millisecond accuracy without browser throttling
@@ -632,7 +914,7 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
     };
   }, [isTimerRunning]);
 
-  // Periodic 10-Second Clock Calibration (Sync with Origin & Edge Master Clock)
+  // Periodic Clock Calibration (Sync with Origin & Edge Master Clock every 30 seconds)
   useEffect(() => {
     const calibrateClock = async () => {
       try {
@@ -645,7 +927,7 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
     };
 
     calibrateClock();
-    const calibInterval = setInterval(calibrateClock, 10000);
+    const calibInterval = setInterval(calibrateClock, 30000);
     return () => clearInterval(calibInterval);
   }, []);
 
@@ -744,7 +1026,7 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
     setIsInstantMode(instant);
     setElapsedSeconds(0);
     setIsTimerRunning(true);
-    setViewState('quiz');
+    setView('quiz');
 
     // Create and persist active exam session immediately
     const devId = getOrCreateDeviceId();
@@ -798,7 +1080,7 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
     activeExamSessionRef.current = updatedSession;
     persistActiveExam(updatedSession);
     setIsTimerRunning(true);
-    setViewState('quiz');
+    setView('quiz');
     addToast(`Resumed "${activeExamSession.quiz.title}" at Question ${(activeExamSession.currentQuestionIndex || 0) + 1}`, 'info');
   };
 
@@ -815,6 +1097,7 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
     setElapsedSeconds(0);
     setIsTimerRunning(false);
     setOriginDeviceId(null);
+    setView('home');
     addToast('In-progress quiz discarded', 'info');
   };
 
@@ -1049,7 +1332,7 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
       saveUserHistoryFirestore(user.username, newHistory).catch(() => {});
     }
 
-    setViewState('results');
+    setView('results');
     addToast(`Exam completed! Score: ${score}/${attempt.total}`, 'success');
   };
 
@@ -1061,7 +1344,7 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
     setCurrentQuestionIndex(0);
     setElapsedSeconds(0);
     setIsTimerRunning(true);
-    setViewState('quiz');
+    setView('quiz');
 
     const session: ActiveExamSession = {
       quiz: activeQuiz,
@@ -1172,7 +1455,7 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
     setQuestionNotes(attempt.questionNotes || {});
     setElapsedSeconds(0);
     setIsTimerRunning(false);
-    setViewState('results');
+    setView('results');
   };
 
   // Share Assessment Operations
