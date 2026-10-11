@@ -37,14 +37,18 @@ function hashPassword(pass: string): string {
   return btoa(`mcqhub:${pass}`);
 }
 
+function getFirestoreApiKey(env: Env): string {
+  return env.FIREBASE_API_KEY || 'AIzaSyATzfV9pFDedahaiCwjrbELK9r21jKQ2As';
+}
+
 function getFirestoreBaseUrl(env: Env): string {
   const projectId = env.FIREBASE_PROJECT_ID || 'mcqhub-724e3';
-  const apiKey = env.FIREBASE_API_KEY || 'AIzaSyATzfV9pFDedahaiCwjrbELK9r21jKQ2As';
+  const apiKey = getFirestoreApiKey(env);
   return `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents`;
 }
 
 async function getFirestoreDoc(env: Env, path: string): Promise<any | null> {
-  const apiKey = env.FIREBASE_API_KEY || 'AIzaSyATzfV9pFDedahaiCwjrbELK9r21jKQ2As';
+  const apiKey = getFirestoreApiKey(env);
   const url = `${getFirestoreBaseUrl(env)}/${path}?key=${apiKey}`;
   const res = await fetch(url);
   if (!res.ok) {
@@ -56,7 +60,7 @@ async function getFirestoreDoc(env: Env, path: string): Promise<any | null> {
 }
 
 async function patchFirestoreDoc(env: Env, path: string, fields: Record<string, any>, maskFields?: string[]): Promise<any> {
-  const apiKey = env.FIREBASE_API_KEY || 'AIzaSyATzfV9pFDedahaiCwjrbELK9r21jKQ2As';
+  const apiKey = getFirestoreApiKey(env);
   let url = `${getFirestoreBaseUrl(env)}/${path}?key=${apiKey}`;
   if (maskFields && maskFields.length > 0) {
     url += maskFields.map(f => `&updateMask.fieldPaths=${encodeURIComponent(f)}`).join('');

@@ -26,6 +26,7 @@ cloudflare-worker/.dev.vars
 
 # Firebase & Wrangler
 .wrangler/
+worker-configuration.d.ts
 *-debug.log*
 firebase-debug.log
 
