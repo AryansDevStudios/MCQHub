@@ -17,7 +17,7 @@ const fontMono = JetBrains_Mono({
 export const metadata: Metadata = {
   title: 'MCQHub - Assessment Studio & Examination Engine',
   description:
-    'Engineering-grade generative assessment engine with LaTeX math, Firebase Firestore database, and Gemini 2.5 Flash Lite.',
+    'Engineering-grade generative assessment engine with LaTeX math, Firebase Firestore database, and Gemini 3.5 Flash Lite.',
   icons: {
     icon: [
       { url: '/favicon.ico', sizes: 'any' },

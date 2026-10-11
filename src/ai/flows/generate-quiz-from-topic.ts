@@ -27,7 +27,7 @@ export const GenerateQuizFromTopicOutputSchema = z.object({
 export type GenerateQuizFromTopicOutput = z.infer<typeof GenerateQuizFromTopicOutputSchema>;
 
 /**
- * Robust generator that uses Google Gemini 2.5 Flash Lite
+ * Robust generator that uses Google Gemini 3.5 Flash Lite
  */
 export async function generateQuizFromTopic(
   input: GenerateQuizFromTopicInput,

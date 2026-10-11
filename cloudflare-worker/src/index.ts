@@ -4,7 +4,7 @@
  * - Direct Firestore REST API integration (Bypasses browser ad-blockers & net::ERR_BLOCKED_BY_CLIENT)
  * - User Authentication (Register, Login, Token generation, Session audit)
  * - User Data Persistence (Quizzes library, History attempt logs)
- * - Edge AI proxy to Google Gemini 2.5 Flash Lite
+ * - Edge AI proxy to Google Gemini 3.5 Flash Lite
  * - Heuristic system status and latency ping
  * - Model Context Protocol (MCP) JSON-RPC 2.0 gateway
  */

@@ -47,7 +47,7 @@ service cloud.firestore {
 
 ### 3. Cloudflare Workers Edge Gateway & MCP Readiness
 A complete Cloudflare Workers implementation is located in [`cloudflare-worker/`](file:///d:/MCQHub/cloudflare-worker):
-- **Edge AI Proxy:** Ultra-low latency edge gateway invoking Google Gemini 2.5 Flash Lite with CORS headers.
+- **Edge AI Proxy:** Ultra-low latency edge gateway invoking Google Gemini 3.5 Flash Lite with CORS headers.
 - **Heuristic Endpoint:** `/api/heuristic` reports Cloudflare edge datacenter colocations (e.g., `BOM`, `LHR`).
 - **MCP Support (Model Context Protocol):** `/api/mcp` implements JSON-RPC 2.0 endpoints for `tools/list` and `tools/call`, enabling external AI assistants (Cursor, Windsurf, Claude Desktop, Antigravity) to synthesize exams and query database status.
 
