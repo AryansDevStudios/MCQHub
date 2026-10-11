@@ -20,8 +20,6 @@ import {
   ChevronRight,
   Trash2,
   Calendar,
-  CheckCircle2,
-  XCircle,
   RefreshCw,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -51,7 +49,7 @@ export function HistoryView() {
         <div>
           <div className="flex items-center gap-2 mb-1">
             <Badge variant="outline" className="text-xs py-0.5 px-2 text-primary border-primary/30">
-              Exam History
+              Quiz History
             </Badge>
           </div>
           <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">
@@ -60,10 +58,10 @@ export function HistoryView() {
           <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
             {user ? (
               <span>
-                Saved and synced with Cloud Firestore for <strong className="text-foreground">@{user.username}</strong>
+                Synced to your account (<strong className="text-foreground">@{user.username}</strong>)
                 {lastSyncTime && (
                   <span className="text-[11px] opacity-75 font-mono ml-2">
-                    (Aligned: {new Date(lastSyncTime).toLocaleTimeString()})
+                    • Last synced {new Date(lastSyncTime).toLocaleTimeString()}
                   </span>
                 )}
               </span>
@@ -81,8 +79,8 @@ export function HistoryView() {
               size="sm"
               disabled={isSyncing}
               onClick={() => syncLibraryWithCloud(false)}
-              className="h-8 text-xs font-mono gap-1.5 border-border/70 shrink-0"
-              title="Align history logs with Cloud Firestore"
+              className="h-8 text-xs gap-1.5 border-border/70 shrink-0"
+              title="Sync history with cloud"
             >
               <RefreshCw className={cn('w-3.5 h-3.5 text-primary', isSyncing && 'animate-spin')} />
               <span>{isSyncing ? 'Syncing...' : 'Sync Cloud'}</span>
@@ -94,10 +92,10 @@ export function HistoryView() {
               variant="ghost"
               size="sm"
               onClick={() => setShowClearDialog(true)}
-              className="h-8 text-xs text-rose-400 hover:text-rose-300 hover:bg-rose-950/20 gap-1.5"
+              className="h-8 text-xs text-rose-500 hover:text-rose-600 hover:bg-rose-500/10 gap-1.5"
             >
               <Trash2 className="w-3.5 h-3.5" />
-              <span>Clear All</span>
+              <span>Clear History</span>
             </Button>
           )}
         </div>
@@ -105,7 +103,7 @@ export function HistoryView() {
 
       {/* Attempts List */}
       {history.length === 0 ? (
-        <div className="py-16 text-center rounded-lg border border-dashed border-border/70 p-6 space-y-3">
+        <div className="py-16 text-center rounded-xl border border-dashed border-border/70 p-6 space-y-3">
           <div className="w-10 h-10 rounded-full bg-muted/50 flex items-center justify-center mx-auto text-muted-foreground">
             <HistoryIcon className="w-5 h-5" />
           </div>
@@ -127,83 +125,83 @@ export function HistoryView() {
             return (
               <div
                 key={attempt.id}
-                className="rounded-lg border border-border bg-card p-4 hover:border-primary/50 transition-colors shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 group"
+                className="rounded-xl border border-border bg-card p-4 sm:p-5 hover:border-primary/40 transition-all shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4 group"
               >
-                {/* Attempt info (clickable to review) */}
-                <div
-                  onClick={() => viewAttemptResult(attempt)}
-                  className="space-y-1.5 cursor-pointer flex-1"
-                >
-                  <div className="flex items-center gap-2">
-                    <h3 className="text-sm font-semibold text-foreground group-hover:text-primary transition-colors">
-                      {attempt.quizTitle}
-                    </h3>
-                    <Badge variant="outline" className="text-[10px] py-0 px-1">
-                      {attempt.mode} Mode
-                    </Badge>
+                {/* Left: Score Badge & Attempt Details */}
+                <div className="flex items-start gap-3.5 flex-1 min-w-0">
+                  {/* Score Pill / Badge */}
+                  <div
+                    className={cn(
+                      'w-12 h-12 rounded-xl flex flex-col items-center justify-center shrink-0 border font-mono font-bold transition-transform group-hover:scale-105',
+                      isHigh
+                        ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-500'
+                        : isMedium
+                        ? 'bg-amber-500/10 border-amber-500/30 text-amber-500'
+                        : 'bg-rose-500/10 border-rose-500/30 text-rose-500'
+                    )}
+                  >
+                    <span className="text-sm leading-none">{pct}%</span>
+                    <span className="text-[9px] font-normal uppercase opacity-75 mt-0.5">
+                      {attempt.score}/{attempt.total}
+                    </span>
                   </div>
 
-                  <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                    <span className="flex items-center gap-1">
-                      <Calendar className="w-3 h-3" />
-                      {new Date(attempt.date).toLocaleString()}
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <Clock className="w-3 h-3" />
-                      {attempt.timeSpent}
-                    </span>
+                  {/* Information */}
+                  <div className="space-y-1 min-w-0 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h3
+                        onClick={() => viewAttemptResult(attempt)}
+                        className="text-sm sm:text-base font-semibold text-foreground group-hover:text-primary transition-colors cursor-pointer truncate"
+                      >
+                        {attempt.quizTitle}
+                      </h3>
+                      <Badge
+                        variant="secondary"
+                        className="text-[10px] py-0 px-1.5 font-normal shrink-0"
+                      >
+                        {attempt.mode === 'Instant' ? 'Instant Mode' : 'Standard'}
+                      </Badge>
+                    </div>
+
+                    <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
+                      <span className="flex items-center gap-1">
+                        <Calendar className="w-3 h-3 text-muted-foreground/70" />
+                        {new Date(attempt.date).toLocaleDateString(undefined, {
+                          month: 'short',
+                          day: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <Clock className="w-3 h-3 text-muted-foreground/70" />
+                        {attempt.timeSpent}
+                      </span>
+                    </div>
                   </div>
                 </div>
 
-                {/* Score & Action Buttons */}
-                <div className="flex items-center gap-3 self-end sm:self-center">
-                  <div
+                {/* Right: Actions (Review + Delete) */}
+                <div className="flex items-center justify-between sm:justify-end gap-2 pt-2 sm:pt-0 border-t sm:border-t-0 border-border/50 shrink-0">
+                  <Button
+                    variant="outline"
+                    size="sm"
                     onClick={() => viewAttemptResult(attempt)}
-                    className="text-right cursor-pointer"
+                    className="h-8 text-xs font-medium gap-1.5 px-3 border-border/80 hover:border-primary/40 hover:bg-primary/5 hover:text-primary flex-1 sm:flex-initial"
                   >
-                    <div className="flex items-center gap-1.5 justify-end">
-                      {isHigh ? (
-                        <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                      ) : isMedium ? (
-                        <CheckCircle2 className="w-4 h-4 text-amber-400" />
-                      ) : (
-                        <XCircle className="w-4 h-4 text-rose-400" />
-                      )}
-                      <span className="font-bold text-sm text-foreground">
-                        {attempt.score}/{attempt.total}
-                      </span>
-                    </div>
-                    <div
-                      className={`text-[11px] font-medium ${
-                        isHigh ? 'text-emerald-400' : isMedium ? 'text-amber-400' : 'text-rose-400'
-                      }`}
-                    >
-                      {pct}%
-                    </div>
-                  </div>
+                    <span>Review Answers</span>
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </Button>
 
-                  {/* Individual Delete Button */}
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setAttemptToDelete(attempt);
-                    }}
-                    className="h-8 w-8 p-0 text-muted-foreground hover:text-rose-400 hover:bg-rose-950/20"
+                    onClick={() => setAttemptToDelete(attempt)}
+                    className="h-8 w-8 p-0 text-muted-foreground hover:text-rose-500 hover:bg-rose-500/10 shrink-0"
                     title="Delete this attempt"
                   >
-                    <Trash2 className="w-3.5 h-3.5" />
+                    <Trash2 className="w-4 h-4" />
                   </Button>
-
-                  {/* Review Arrow */}
-                  <div
-                    onClick={() => viewAttemptResult(attempt)}
-                    className="cursor-pointer pl-1 text-muted-foreground group-hover:text-primary group-hover:translate-x-0.5 transition-all"
-                    title="Review attempt details"
-                  >
-                    <ChevronRight className="w-4 h-4" />
-                  </div>
                 </div>
               </div>
             );
@@ -213,7 +211,7 @@ export function HistoryView() {
 
       {/* Single Attempt Delete Confirmation Modal */}
       <AlertDialog open={!!attemptToDelete} onOpenChange={(open) => !open && setAttemptToDelete(null)}>
-        <AlertDialogContent className="bg-card border-border text-foreground">
+        <AlertDialogContent className="w-[calc(100vw-2rem)] max-w-md bg-card border-border text-foreground rounded-xl">
           <AlertDialogHeader>
             <AlertDialogTitle className="text-base font-semibold">
               Delete This Exam Record?
@@ -241,13 +239,13 @@ export function HistoryView() {
 
       {/* Clear All Confirmation Modal */}
       <AlertDialog open={showClearDialog} onOpenChange={setShowClearDialog}>
-        <AlertDialogContent className="bg-card border-border text-foreground">
+        <AlertDialogContent className="w-[calc(100vw-2rem)] max-w-md bg-card border-border text-foreground rounded-xl">
           <AlertDialogHeader>
             <AlertDialogTitle className="text-base font-semibold">
               Clear All Examination History?
             </AlertDialogTitle>
             <AlertDialogDescription className="text-xs text-muted-foreground">
-              This will permanently delete all {history.length} logged exam attempts from local storage and Cloud Firestore.
+              This will permanently delete all {history.length} logged exam attempts from this device and the cloud.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

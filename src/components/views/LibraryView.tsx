@@ -204,7 +204,7 @@ export function LibraryView() {
 
       {/* Delete Confirmation Modal */}
       <AlertDialog open={!!quizToDelete} onOpenChange={(open) => !open && setQuizToDelete(null)}>
-        <AlertDialogContent className="bg-card border-border text-foreground">
+        <AlertDialogContent className="w-[calc(100vw-2rem)] max-w-md bg-card border-border text-foreground rounded-xl">
           <AlertDialogHeader>
             <AlertDialogTitle className="text-base font-semibold">
               Delete Quiz from Library?
