@@ -3,10 +3,10 @@
  * Features:
  * - Direct Firestore REST API integration (Bypasses browser ad-blockers & net::ERR_BLOCKED_BY_CLIENT)
  * - User Authentication (Register, Login, Token generation, Session audit)
- * - User Data Persistence (Quizzes library, History attempt logs)
+ * - User Data Persistence (Quizzes library, History attempt logs, Active exam sync)
  * - Edge AI proxy to Google Gemini 3.5 Flash Lite
- * - Heuristic system status and latency ping
- * - Model Context Protocol (MCP) JSON-RPC 2.0 gateway
+ * - High-Precision SNTP Clock Calibration
+ * - Model Context Protocol (MCP) JSON-RPC 2.0 Gateway (10 Specialized Tools)
  */
 
 export interface Env {
@@ -21,6 +21,11 @@ const CORS_HEADERS = {
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type, Authorization',
 };
+
+const DEFAULT_FIREBASE_API_KEY = 'AIzaSyATzfV9pFDedahaiCwjrbELK9r21jKQ2As';
+const DEFAULT_FIREBASE_PROJECT_ID = 'mcqhub-724e3';
+const DEFAULT_GEMINI_MODEL = 'gemini-3.5-flash-lite';
+const MCQ_HUB_PUBLIC_BASE = 'https://mcqhub.pages.dev';
 
 function jsonResponse(data: any, status = 200) {
   return new Response(JSON.stringify(data), {
@@ -38,13 +43,25 @@ function hashPassword(pass: string): string {
 }
 
 function getFirestoreApiKey(env: Env): string {
-  return env.FIREBASE_API_KEY || 'AIzaSyATzfV9pFDedahaiCwjrbELK9r21jKQ2As';
+  return env.FIREBASE_API_KEY || DEFAULT_FIREBASE_API_KEY;
 }
 
 function getFirestoreBaseUrl(env: Env): string {
-  const projectId = env.FIREBASE_PROJECT_ID || 'mcqhub-724e3';
+  const projectId = env.FIREBASE_PROJECT_ID || DEFAULT_FIREBASE_PROJECT_ID;
   const apiKey = getFirestoreApiKey(env);
   return `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents`;
+}
+
+function getGeminiApiKey(env: Env, override?: string): string {
+  const key = override || env.GEMINI_API_KEY;
+  if (!key) {
+    throw new Error('Gemini API key is required. Please set GEMINI_API_KEY in Worker environment or provide Bearer token.');
+  }
+  return key;
+}
+
+function getGeminiModel(env: Env): string {
+  return env.GEMINI_MODEL || DEFAULT_GEMINI_MODEL;
 }
 
 async function getFirestoreDoc(env: Env, path: string): Promise<any | null> {
@@ -117,6 +134,693 @@ function parseDocFields(doc: any): Record<string, any> {
   return res;
 }
 
+async function generateUnique5DigitCode(env: Env): Promise<string> {
+  let attempts = 0;
+  while (attempts < 10) {
+    const candidate = Math.floor(10000 + Math.random() * 90000).toString();
+    const doc = await getFirestoreDoc(env, `shared_quizzes/${candidate}`);
+    if (!doc) {
+      return candidate;
+    }
+    attempts++;
+  }
+  return Math.floor(10000 + Math.random() * 90000).toString();
+}
+
+async function callGeminiGenerateQuiz(
+  env: Env,
+  topic: string,
+  questionCount: number = 5,
+  difficulty: string = 'Medium',
+  quizStyle: string = 'General',
+  context: string = '',
+  withExplanations: boolean = true,
+  apiKeyOverride?: string
+): Promise<any> {
+  const apiKey = getGeminiApiKey(env, apiKeyOverride);
+  const model = getGeminiModel(env);
+
+  const systemPrompt = `You are an expert academic assessment creator. Create a multiple-choice quiz on the topic "${topic}".
+Generate exactly ${questionCount} questions at ${difficulty} level with style "${quizStyle}".
+${withExplanations ? 'Include detailed step-by-step explanations for each question.' : 'Do not include explanations.'}
+${context ? `Use the following context:\n${context}` : ''}
+Use Markdown and LaTeX where appropriate (e.g. $E=mc^2$).
+Respond strictly in JSON matching this schema:
+{
+  "title": "string",
+  "questions": [
+    {
+      "question": "string",
+      "options": ["string", "string", "string", "string"],
+      "correctAnswer": 0,
+      "explanation": "string"
+    }
+  ]
+}`;
+
+  const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+  const res = await fetch(geminiUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contents: [{ parts: [{ text: systemPrompt }] }],
+      generationConfig: {
+        responseMimeType: 'application/json',
+        temperature: 0.7,
+      },
+    }),
+  });
+
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`Gemini API error: ${res.status} - ${errText}`);
+  }
+
+  const data: any = await res.json();
+  const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (!text) {
+    throw new Error('Gemini API returned an empty response');
+  }
+  return JSON.parse(text);
+}
+
+async function callGeminiSummarize(
+  env: Env,
+  quizTitle: string,
+  score: number,
+  total: number,
+  questions: any[],
+  userAnswers: any[],
+  apiKeyOverride?: string
+): Promise<string> {
+  const apiKey = getGeminiApiKey(env, apiKeyOverride);
+  const model = getGeminiModel(env);
+
+  const prompt = `You are a helpful, neutral academic tutor and study advisor.
+Analyze the user's performance on the quiz: "${quizTitle}".
+${score !== undefined && total ? `Score: ${score}/${total} (${Math.round((score / total) * 100)}%).` : ''}
+
+Questions and user answers:
+${JSON.stringify(
+  Array.isArray(questions)
+    ? questions.map((q: any, i: number) => ({
+        questionNumber: i + 1,
+        question: q.question,
+        correctOption: q.options ? q.options[q.correctAnswer] : q.correctAnswer,
+        userAnswer: userAnswers && userAnswers[i] !== undefined && q.options ? q.options[userAnswers[i]] : (userAnswers && userAnswers[i] !== undefined ? userAnswers[i] : 'Skipped'),
+        isCorrect: userAnswers ? userAnswers[i] === q.correctAnswer : undefined,
+      }))
+    : questions
+)}
+
+Guidelines:
+1. Tone: Maintain a balanced, neutral, and relaxed tone (not strict, harsh, or overly critical). Analyze the results objectively and constructively.
+2. Markdown & LaTeX: Write in structured Markdown with headers and bullet points. Use LaTeX notation for ALL mathematical formulas, variables, and scientific equations (e.g., inline \`$E = mc^2$\`, \`$\\lambda$\`, \`$\\Delta x$\`, or display \`$$\\frac{a}{b}$$\`). Ensure mathematical symbols and expressions render cleanly in LaTeX.
+3. Structure:
+   - ### Overview: A neutral, factual summary of the performance.
+   - ### Strengths: Concepts and problems handled successfully.
+   - ### Concepts to Review: Objective review of any mistakes, explaining the underlying principles with LaTeX formulas where helpful.
+   - ### Study Recommendations: 2-3 straightforward suggestions for further practice.
+
+Respond directly in clean Markdown.`;
+
+  const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+  const res = await fetch(geminiUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: { temperature: 0.7 },
+    }),
+  });
+
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`Gemini API error: ${res.status} - ${errText}`);
+  }
+
+  const data: any = await res.json();
+  return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+}
+
+// ---------------------------------------------------------
+// MCP (Model Context Protocol) Tools Definitions
+// ---------------------------------------------------------
+const MCP_TOOLS_DEFINITIONS = [
+  {
+    name: 'generate_and_share_quiz',
+    description: 'Generate an academic multiple-choice quiz using Gemini 3.5 Flash Lite, automatically publish it to MCQHub with a 5-digit numeric share code, and generate a public interactive test link. Can optionally dispatch directly to a signed-in user library in Firestore.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        topic: { type: 'string', description: 'Academic subject, chapter, or topic (e.g., "Class 10 Chemical Reactions and Equations", "Calculus Integrals")' },
+        questionCount: { type: 'number', description: 'Number of questions to generate (1 to 30, default: 5)' },
+        difficulty: { type: 'string', enum: ['Easy', 'Medium', 'Hard'], description: 'Difficulty tier (default: Medium)' },
+        quizStyle: { type: 'string', enum: ['General', 'Conceptual', 'Problem Solving', 'Board Exam Prep'], description: 'Quiz style focus (default: General)' },
+        context: { type: 'string', description: 'Optional context, notes, or chapter excerpts to ground the questions' },
+        withExplanations: { type: 'boolean', description: 'Whether to include detailed step-by-step explanations (default: true)' },
+        authorUsername: { type: 'string', description: 'Optional username of the creator or signed-in user' },
+        saveToUserLibrary: { type: 'boolean', description: 'Whether to dispatch and save the generated quiz directly to the user library in Firestore (default: false)' },
+        visibility: { type: 'string', enum: ['public', 'private'], description: 'Assessment visibility (default: public)' },
+      },
+      required: ['topic'],
+    },
+  },
+  {
+    name: 'create_custom_quiz',
+    description: 'Publish a custom quiz with handcrafted questions directly to MCQHub, generating an immutable 5-digit share PIN and public interactive link.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        title: { type: 'string', description: 'Title of the assessment' },
+        description: { type: 'string', description: 'Optional description or instructions' },
+        questions: {
+          type: 'array',
+          description: 'Array of questions',
+          items: {
+            type: 'object',
+            properties: {
+              question: { type: 'string', description: 'Question text with Markdown/LaTeX support' },
+              options: { type: 'array', items: { type: 'string' }, description: 'Array of option choices (typically 4)' },
+              correctAnswer: { type: 'number', description: '0-indexed index of correct option' },
+              explanation: { type: 'string', description: 'Optional step-by-step explanation' },
+            },
+            required: ['question', 'options', 'correctAnswer'],
+          },
+        },
+        authorUsername: { type: 'string', description: 'Optional creator username' },
+        saveToUserLibrary: { type: 'boolean', description: 'Whether to save to the author personal library (default: false)' },
+      },
+      required: ['title', 'questions'],
+    },
+  },
+  {
+    name: 'get_quiz_by_share_code',
+    description: 'Retrieve any quiz published on MCQHub using its 5-digit numeric share code.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        shareCode: { type: 'string', description: 'The 5-digit numeric share code (e.g. "48921")' },
+      },
+      required: ['shareCode'],
+    },
+  },
+  {
+    name: 'login_user',
+    description: 'Authenticate an MCQHub user account to verify credentials and retrieve profile details.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        username: { type: 'string', description: 'Account username' },
+        password: { type: 'string', description: 'Account password' },
+      },
+      required: ['username', 'password'],
+    },
+  },
+  {
+    name: 'register_user',
+    description: 'Register a new user account on MCQHub edge Firestore backend.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        username: { type: 'string', description: 'Desired username (minimum 3 alphanumeric characters)' },
+        password: { type: 'string', description: 'Desired password (minimum 4 characters)' },
+        displayName: { type: 'string', description: 'Optional display name' },
+      },
+      required: ['username', 'password'],
+    },
+  },
+  {
+    name: 'get_user_library',
+    description: 'Retrieve all quizzes and assessments saved in a user personal library.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        username: { type: 'string', description: 'Account username' },
+      },
+      required: ['username'],
+    },
+  },
+  {
+    name: 'save_quiz_to_library',
+    description: 'Save a quiz by its 5-digit share code or quiz payload into a user personal library.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        username: { type: 'string', description: 'Target user username' },
+        shareCode: { type: 'string', description: '5-digit numeric share code to import' },
+        quiz: { type: 'object', description: 'Optional full quiz payload to save directly' },
+      },
+      required: ['username'],
+    },
+  },
+  {
+    name: 'get_user_history',
+    description: 'Retrieve past quiz attempts, scores, and any unsubmitted or active in-progress assessment for a user.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        username: { type: 'string', description: 'Account username' },
+      },
+      required: ['username'],
+    },
+  },
+  {
+    name: 'analyze_quiz_results',
+    description: 'Run AI Tutor analysis on a student quiz performance, generating detailed Markdown and LaTeX recommendations.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        quizTitle: { type: 'string', description: 'Assessment title' },
+        score: { type: 'number', description: 'Achieved score' },
+        total: { type: 'number', description: 'Total possible score' },
+        questions: { type: 'array', description: 'List of question objects' },
+        userAnswers: { type: 'array', description: 'User selected answer indexes' },
+      },
+      required: ['quizTitle', 'score', 'total', 'questions', 'userAnswers'],
+    },
+  },
+  {
+    name: 'get_system_status',
+    description: 'Check MCQHub edge server health, Firestore database latency, active Cloudflare data center (colo), and Gemini AI model.',
+    inputSchema: {
+      type: 'object',
+      properties: {},
+    },
+  },
+];
+
+async function executeMcpTool(env: Env, name: string, args: any, cfData: any, authHeader?: string): Promise<any> {
+  const apiKeyOverride = authHeader ? authHeader.replace('Bearer ', '').trim() : undefined;
+
+  switch (name) {
+    case 'generate_and_share_quiz': {
+      const topic = args?.topic;
+      if (!topic) throw new Error('topic is required');
+      const questionCount = Math.min(Math.max(parseInt(args?.questionCount, 10) || 5, 1), 30);
+      const difficulty = args?.difficulty || 'Medium';
+      const quizStyle = args?.quizStyle || 'General';
+      const context = args?.context || '';
+      const withExplanations = args?.withExplanations !== false;
+      const authorUsername = args?.authorUsername?.trim();
+      const saveToUserLibrary = !!args?.saveToUserLibrary;
+      const visibility = args?.visibility || 'public';
+
+      const parsedQuiz = await callGeminiGenerateQuiz(
+        env,
+        topic,
+        questionCount,
+        difficulty,
+        quizStyle,
+        context,
+        withExplanations,
+        apiKeyOverride
+      );
+
+      const shareCode = await generateUnique5DigitCode(env);
+      const creator = authorUsername || 'MCQHub AI Tutor';
+      const createdAt = new Date().toISOString();
+      const quizId = `ai_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+
+      const quizObj = {
+        ...parsedQuiz,
+        id: quizId,
+        shareId: shareCode,
+        createdBy: creator,
+        originalCreator: creator,
+        createdAt,
+        visibility,
+      };
+
+      // Store in shared_quizzes collection
+      await patchFirestoreDoc(env, `shared_quizzes/${shareCode}`, {
+        shareId: shareCode,
+        quiz: quizObj,
+        createdBy: creator,
+        originalCreator: creator,
+        createdAt,
+        visibility,
+      });
+
+      let savedToLibrary = false;
+      if (saveToUserLibrary && authorUsername) {
+        const cleanUser = sanitizeUsername(authorUsername);
+        const userDoc = await getFirestoreDoc(env, `users/${cleanUser}`);
+        if (userDoc) {
+          const userData = parseDocFields(userDoc);
+          const existingQuizzes = Array.isArray(userData.quizzes) ? userData.quizzes : [];
+          const updated = [quizObj, ...existingQuizzes.filter((q: any) => q.shareId !== shareCode && q.id !== quizObj.id)];
+          await patchFirestoreDoc(env, `users/${cleanUser}`, { quizzes: updated }, ['quizzes']);
+          savedToLibrary = true;
+        }
+      }
+
+      const publicLink = `${MCQ_HUB_PUBLIC_BASE}/?share=${shareCode}`;
+      const directQuizLink = `${MCQ_HUB_PUBLIC_BASE}/quiz?share=${shareCode}`;
+
+      return {
+        success: true,
+        shareCode,
+        publicLink,
+        directQuizLink,
+        title: quizObj.title,
+        questionCount: quizObj.questions.length,
+        originalCreator: creator,
+        createdAt,
+        savedToLibrary,
+        quiz: quizObj,
+      };
+    }
+
+    case 'create_custom_quiz': {
+      const { title, questions, description, authorUsername, saveToUserLibrary } = args;
+      if (!title || !Array.isArray(questions) || questions.length === 0) {
+        throw new Error('Valid title and at least 1 question are required');
+      }
+
+      const shareCode = await generateUnique5DigitCode(env);
+      const creator = authorUsername?.trim() || 'Custom Creator';
+      const createdAt = new Date().toISOString();
+      const quizId = `cust_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+
+      const quizObj = {
+        id: quizId,
+        title,
+        description: description || '',
+        questions,
+        shareId: shareCode,
+        createdBy: creator,
+        originalCreator: creator,
+        createdAt,
+      };
+
+      await patchFirestoreDoc(env, `shared_quizzes/${shareCode}`, {
+        shareId: shareCode,
+        quiz: quizObj,
+        createdBy: creator,
+        originalCreator: creator,
+        createdAt,
+      });
+
+      let savedToLibrary = false;
+      if (saveToUserLibrary && authorUsername) {
+        const cleanUser = sanitizeUsername(authorUsername);
+        const userDoc = await getFirestoreDoc(env, `users/${cleanUser}`);
+        if (userDoc) {
+          const userData = parseDocFields(userDoc);
+          const existingQuizzes = Array.isArray(userData.quizzes) ? userData.quizzes : [];
+          const updated = [quizObj, ...existingQuizzes.filter((q: any) => q.shareId !== shareCode && q.id !== quizObj.id)];
+          await patchFirestoreDoc(env, `users/${cleanUser}`, { quizzes: updated }, ['quizzes']);
+          savedToLibrary = true;
+        }
+      }
+
+      return {
+        success: true,
+        shareCode,
+        publicLink: `${MCQ_HUB_PUBLIC_BASE}/?share=${shareCode}`,
+        directQuizLink: `${MCQ_HUB_PUBLIC_BASE}/quiz?share=${shareCode}`,
+        title,
+        questionCount: questions.length,
+        originalCreator: creator,
+        savedToLibrary,
+        quiz: quizObj,
+      };
+    }
+
+    case 'get_quiz_by_share_code': {
+      const shareCode = (args?.shareCode || '').toString().trim().replace(/[^a-zA-Z0-9_-]/g, '');
+      if (!shareCode) throw new Error('5-digit shareCode is required');
+
+      const doc = await getFirestoreDoc(env, `shared_quizzes/${shareCode}`);
+      if (!doc) throw new Error(`Quiz with 5-digit share code '${shareCode}' was not found`);
+
+      const data = parseDocFields(doc);
+      const origCreator = data.originalCreator || data.createdBy || (data.quiz && (data.quiz.originalCreator || data.quiz.createdBy)) || 'Anonymous';
+      const origCreatedAt = data.createdAt || (data.quiz && data.quiz.createdAt) || new Date().toISOString();
+
+      return {
+        success: true,
+        shareCode,
+        publicLink: `${MCQ_HUB_PUBLIC_BASE}/?share=${shareCode}`,
+        directQuizLink: `${MCQ_HUB_PUBLIC_BASE}/quiz?share=${shareCode}`,
+        originalCreator: origCreator,
+        createdAt: origCreatedAt,
+        quiz: data.quiz || data,
+      };
+    }
+
+    case 'login_user': {
+      const { username, password } = args;
+      const cleanUser = sanitizeUsername(username);
+      if (!cleanUser || !password) throw new Error('Username and password are required');
+
+      const userDoc = await getFirestoreDoc(env, `users/${cleanUser}`);
+      if (!userDoc) throw new Error(`User '${cleanUser}' does not exist`);
+
+      const userData = parseDocFields(userDoc);
+      if (userData.passwordHash !== hashPassword(password)) {
+        throw new Error('Incorrect password');
+      }
+
+      const now = new Date().toISOString();
+      const tokenId = `tok_${Math.random().toString(36).substring(2, 12)}_${Date.now()}`;
+      const newSession = {
+        tokenId,
+        timestamp: now,
+        userAgent: 'MCP Client',
+        edgeColo: cfData.colo || 'LOCAL',
+        status: 'active',
+      };
+
+      const existingSessions = Array.isArray(userData.sessions) ? userData.sessions : [];
+      const updatedSessions = [newSession, ...existingSessions.slice(0, 19)];
+
+      await patchFirestoreDoc(env, `users/${cleanUser}`, {
+        sessions: updatedSessions,
+        lastLogin: now,
+      }, ['sessions', 'lastLogin']);
+
+      return {
+        success: true,
+        profile: {
+          userId: userData.userId,
+          username: userData.username,
+          displayName: userData.displayName,
+          createdAt: userData.createdAt,
+          lastLogin: now,
+        },
+        session: newSession,
+        savedQuizzesCount: (userData.quizzes || []).length,
+        historyAttemptsCount: (userData.history || []).length,
+      };
+    }
+
+    case 'register_user': {
+      const { username, password, displayName } = args;
+      const cleanUser = sanitizeUsername(username);
+      if (!cleanUser || cleanUser.length < 3) throw new Error('Username must be at least 3 characters');
+      if (!password || password.length < 4) throw new Error('Password must be at least 4 characters');
+
+      const existingDoc = await getFirestoreDoc(env, `users/${cleanUser}`);
+      if (existingDoc) throw new Error(`Username '${cleanUser}' is already registered`);
+
+      const now = new Date().toISOString();
+      const userId = `usr_${cleanUser}_${Math.random().toString(36).substring(2, 7)}`;
+      const tokenId = `tok_${Math.random().toString(36).substring(2, 12)}_${Date.now()}`;
+
+      const initialSession = {
+        tokenId,
+        timestamp: now,
+        userAgent: 'MCP Client',
+        edgeColo: cfData.colo || 'LOCAL',
+        status: 'active',
+      };
+
+      const profile = {
+        userId,
+        username: cleanUser,
+        displayName: displayName?.trim() || cleanUser,
+        createdAt: now,
+        lastLogin: now,
+      };
+
+      await patchFirestoreDoc(env, `users/${cleanUser}`, {
+        userId,
+        username: cleanUser,
+        displayName: profile.displayName,
+        passwordHash: hashPassword(password),
+        sessions: [initialSession],
+        quizzes: [],
+        history: [],
+        createdAt: now,
+        lastLogin: now,
+      });
+
+      return {
+        success: true,
+        message: 'User registered successfully on edge Firestore database',
+        profile,
+        session: initialSession,
+      };
+    }
+
+    case 'get_user_library': {
+      const cleanUser = sanitizeUsername(args?.username);
+      if (!cleanUser) throw new Error('Username is required');
+
+      const userDoc = await getFirestoreDoc(env, `users/${cleanUser}`);
+      if (!userDoc) throw new Error(`User '${cleanUser}' not found`);
+
+      const userData = parseDocFields(userDoc);
+      const quizzes = Array.isArray(userData.quizzes) ? userData.quizzes : [];
+
+      return {
+        success: true,
+        username: cleanUser,
+        count: quizzes.length,
+        quizzes: quizzes.map((q: any) => ({
+          id: q.id,
+          title: q.title,
+          questionCount: q.questions?.length || 0,
+          shareId: q.shareId || null,
+          shareLink: q.shareId ? `${MCQ_HUB_PUBLIC_BASE}/?share=${q.shareId}` : null,
+          createdAt: q.createdAt,
+          originalCreator: q.originalCreator || q.createdBy || 'Anonymous',
+        })),
+      };
+    }
+
+    case 'save_quiz_to_library': {
+      const cleanUser = sanitizeUsername(args?.username);
+      if (!cleanUser) throw new Error('Username is required');
+
+      const userDoc = await getFirestoreDoc(env, `users/${cleanUser}`);
+      if (!userDoc) throw new Error(`User '${cleanUser}' not found`);
+
+      let targetQuiz = args?.quiz;
+      if (!targetQuiz && args?.shareCode) {
+        const cleanCode = args.shareCode.toString().trim().replace(/[^a-zA-Z0-9_-]/g, '');
+        const sharedDoc = await getFirestoreDoc(env, `shared_quizzes/${cleanCode}`);
+        if (!sharedDoc) throw new Error(`Shared quiz '${cleanCode}' not found`);
+        const parsed = parseDocFields(sharedDoc);
+        targetQuiz = parsed.quiz || parsed;
+      }
+
+      if (!targetQuiz || !targetQuiz.title) {
+        throw new Error('Either shareCode or full quiz object is required');
+      }
+
+      const userData = parseDocFields(userDoc);
+      const existingQuizzes = Array.isArray(userData.quizzes) ? userData.quizzes : [];
+      const updated = [
+        targetQuiz,
+        ...existingQuizzes.filter((q: any) => q.shareId !== targetQuiz.shareId && q.id !== targetQuiz.id),
+      ];
+
+      await patchFirestoreDoc(env, `users/${cleanUser}`, { quizzes: updated }, ['quizzes']);
+
+      return {
+        success: true,
+        message: `Quiz "${targetQuiz.title}" successfully saved to library of ${cleanUser}`,
+        quizTitle: targetQuiz.title,
+        shareId: targetQuiz.shareId || null,
+        totalLibraryCount: updated.length,
+      };
+    }
+
+    case 'get_user_history': {
+      const cleanUser = sanitizeUsername(args?.username);
+      if (!cleanUser) throw new Error('Username is required');
+
+      const userDoc = await getFirestoreDoc(env, `users/${cleanUser}`);
+      if (!userDoc) throw new Error(`User '${cleanUser}' not found`);
+
+      const userData = parseDocFields(userDoc);
+      return {
+        success: true,
+        username: cleanUser,
+        totalAttempts: (userData.history || []).length,
+        history: userData.history || [],
+        activeExam: userData.activeExam || null,
+      };
+    }
+
+    case 'analyze_quiz_results': {
+      const { quizTitle, score, total, questions, userAnswers } = args;
+      if (!quizTitle || score === undefined || total === undefined) {
+        throw new Error('quizTitle, score, and total are required');
+      }
+
+      const analysis = await callGeminiSummarize(
+        env,
+        quizTitle,
+        score,
+        total,
+        questions || [],
+        userAnswers || [],
+        apiKeyOverride
+      );
+
+      return {
+        success: true,
+        quizTitle,
+        score,
+        total,
+        percentage: Math.round((score / total) * 100),
+        analysis,
+      };
+    }
+
+    case 'get_system_status': {
+      const startTime = Date.now();
+      let firestoreOk = false;
+      let latency = 0;
+
+      try {
+        await patchFirestoreDoc(env, 'system/heuristic', {
+          ping: Date.now(),
+          client: 'MCQHub MCP Gateway',
+          edgeColo: cfData.colo || 'LOCAL',
+          country: cfData.country || 'N/A',
+          timestamp: new Date().toISOString(),
+        });
+        latency = Date.now() - startTime;
+        firestoreOk = true;
+      } catch (err: any) {
+        latency = Date.now() - startTime;
+      }
+
+      return {
+        status: 'online',
+        service: 'MCQHub Edge MCP Server',
+        version: '1.0.0',
+        edgeColo: cfData.colo || 'LOCAL',
+        country: cfData.country || 'N/A',
+        firestore: {
+          ok: firestoreOk,
+          latencyMs: latency,
+          projectId: env.FIREBASE_PROJECT_ID || DEFAULT_FIREBASE_PROJECT_ID,
+        },
+        gemini: {
+          model: getGeminiModel(env),
+          ready: true,
+        },
+        mcpEndpoints: {
+          httpRpc: 'https://mcqhub.adsbackend01.workers.dev/api/mcp',
+          appFrontend: MCQ_HUB_PUBLIC_BASE,
+        },
+      };
+    }
+
+    default:
+      throw new Error(`Tool "${name}" is not implemented`);
+  }
+}
+
+// ---------------------------------------------------------
+// Main Cloudflare Worker Fetch Handler
+// ---------------------------------------------------------
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     if (request.method === 'OPTIONS') {
@@ -161,7 +865,7 @@ export default {
           firestore: {
             ok: firestoreOk,
             latencyMs: firestoreLatency,
-            database: `projects/${env.FIREBASE_PROJECT_ID || 'mcqhub-724e3'}/databases/(default)`,
+            database: `projects/${env.FIREBASE_PROJECT_ID || DEFAULT_FIREBASE_PROJECT_ID}/databases/(default)`,
             error: firestoreError,
           },
         });
@@ -180,7 +884,6 @@ export default {
           return jsonResponse({ success: false, error: 'Password must be at least 4 characters' }, 400);
         }
 
-        // Check if user already exists
         const existingDoc = await getFirestoreDoc(env, `users/${cleanUser}`);
         if (existingDoc) {
           return jsonResponse({ success: false, error: 'Username already registered. Please sign in.' }, 409);
@@ -259,7 +962,6 @@ export default {
         const existingSessions = Array.isArray(userData.sessions) ? userData.sessions : [];
         const updatedSessions = [newSession, ...existingSessions.slice(0, 19)];
 
-        // Update sessions and lastLogin in Firestore
         await patchFirestoreDoc(
           env,
           `users/${cleanUser}`,
@@ -380,7 +1082,7 @@ export default {
         return jsonResponse({ success: true, count: Array.isArray(history) ? history.length : 0 });
       }
 
-      // 7b. User Data: Active Exam Sync (Cross-Device Live State with Millisecond Time Sync)
+      // 7b. User Data: Active Exam Sync (Cross-Device Live State)
       if (url.pathname === '/api/user/active-exam') {
         const serverTimeMs = Date.now();
         if (request.method === 'POST') {
@@ -434,7 +1136,7 @@ export default {
         });
       }
 
-      // 7c. Share Quiz: Create Shareable Assessment in Firestore (5-Digit Code & Immutable Original Creator)
+      // 7c. Share Quiz: Create Shareable Assessment (5-Digit Code & Immutable Original Creator)
       if (url.pathname === '/api/share/create' && request.method === 'POST') {
         const body = (await request.json()) as any;
         const { quiz, createdBy } = body;
@@ -442,11 +1144,9 @@ export default {
           return jsonResponse({ success: false, error: 'Valid quiz with questions is required' }, 400);
         }
 
-        // Determine 5-digit numeric share ID
         let finalShareId: string | null = null;
         const providedShareId = (quiz.shareId || '').toString().trim();
 
-        // 1. If this quiz was already shared or imported with a 5-digit code, reuse the exact existing one!
         if (providedShareId && /^\d{5}$/.test(providedShareId)) {
           finalShareId = providedShareId;
           const existingDoc = await getFirestoreDoc(env, `shared_quizzes/${finalShareId}`);
@@ -464,21 +1164,10 @@ export default {
           }
         }
 
-        // 2. Otherwise generate a clean 5-digit random numeric PIN (10000 - 99999)
-        let attempts = 0;
-        while (!finalShareId && attempts < 10) {
-          const candidate = Math.floor(10000 + Math.random() * 90000).toString();
-          const doc = await getFirestoreDoc(env, `shared_quizzes/${candidate}`);
-          if (!doc) {
-            finalShareId = candidate;
-          }
-          attempts++;
-        }
         if (!finalShareId) {
-          finalShareId = Math.floor(10000 + Math.random() * 90000).toString();
+          finalShareId = await generateUnique5DigitCode(env);
         }
 
-        // Preserve the original creator and original creation timestamp
         const originalCreator = quiz.originalCreator || quiz.createdBy || createdBy || 'Anonymous';
         const originalCreatedAt = quiz.createdAt || new Date().toISOString();
 
@@ -514,7 +1203,6 @@ export default {
       // 7d. Share Quiz: Retrieve Shared Assessment from Firestore
       if (url.pathname === '/api/share/get' && request.method === 'GET') {
         const id = url.searchParams.get('id') || '';
-        // Extract 5-digit code or clean string
         const cleanId = id.trim().replace(/[^a-zA-Z0-9_-]/g, '');
         if (!cleanId) {
           return jsonResponse({ success: false, error: '5-digit Share Code is required' }, 400);
@@ -547,7 +1235,7 @@ export default {
         });
       }
 
-      // 7d. User AI Token Sync & Storage
+      // 7d-2. User AI Token Sync & Storage
       if (url.pathname === '/api/user/ai-token' && request.method === 'POST') {
         const body = (await request.json()) as any;
         const { username, encryptedApiKey, syncAiSettings } = body;
@@ -591,185 +1279,199 @@ export default {
         return jsonResponse({ success: true, message: 'AI token permanently deleted from cloud database' });
       }
 
-      // 8. Generate Quiz endpoint
+      // 8. Generate Quiz endpoint (Direct REST)
       if (url.pathname === '/api/generate-quiz' && request.method === 'POST') {
         const apiKey = env.GEMINI_API_KEY || (request.headers.get('Authorization') || '').replace('Bearer ', '');
-        if (!apiKey) {
-          return jsonResponse({ error: 'Missing GEMINI_API_KEY' }, 401);
-        }
-
         const body = (await request.json()) as any;
         const { topic, questionCount = 5, difficulty = 'Medium', quizStyle = 'General', context = '', withExplanations = true } = body;
 
-        const systemPrompt = `You are an expert academic assessment creator. Create a multiple-choice quiz on the topic "${topic}".
-Generate exactly ${questionCount} questions at ${difficulty} level with style "${quizStyle}".
-${withExplanations ? 'Include detailed step-by-step explanations for each question.' : 'Do not include explanations.'}
-${context ? `Use the following context:\n${context}` : ''}
-Use Markdown and LaTeX where appropriate (e.g. $E=mc^2$).
-Respond strictly in JSON matching this schema:
-{
-  "title": "string",
-  "questions": [
-    {
-      "question": "string",
-      "options": ["string", "string", "string", "string"],
-      "correctAnswer": 0,
-      "explanation": "string"
-    }
-  ]
-}`;
-
-        const model = env.GEMINI_MODEL || 'gemini-3.5-flash-lite';
-        const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
-
-        const geminiRes = await fetch(geminiUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: systemPrompt }] }],
-            generationConfig: {
-              responseMimeType: 'application/json',
-              temperature: 0.7,
-            },
-          }),
-        });
-
-        if (!geminiRes.ok) {
-          const errText = await geminiRes.text();
-          return jsonResponse({ error: 'Gemini API error', details: errText }, geminiRes.status);
+        try {
+          const parsedQuiz = await callGeminiGenerateQuiz(
+            env,
+            topic,
+            questionCount,
+            difficulty,
+            quizStyle,
+            context,
+            withExplanations,
+            apiKey
+          );
+          return jsonResponse({ success: true, data: parsedQuiz });
+        } catch (err: any) {
+          return jsonResponse({ error: 'Gemini Generation Failed', details: err.message }, 500);
         }
-
-        const geminiData: any = await geminiRes.json();
-        const responseText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text;
-        const parsedQuiz = JSON.parse(responseText);
-
-        return jsonResponse({ success: true, data: parsedQuiz });
       }
 
-      // 9. Summarize Results endpoint
+      // 9. Summarize Results endpoint (Direct REST)
       if (url.pathname === '/api/summarize-results' && request.method === 'POST') {
         const apiKey = env.GEMINI_API_KEY || (request.headers.get('Authorization') || '').replace('Bearer ', '');
-        if (!apiKey) {
-          return jsonResponse({ error: 'Missing GEMINI_API_KEY' }, 401);
-        }
-
         const body = (await request.json()) as any;
         const { quizTitle, score, total, questions, userAnswers } = body;
 
-        const prompt = `You are a helpful, neutral academic tutor and study advisor.
-Analyze the user's performance on the quiz: "${quizTitle}".
-${score !== undefined && total ? `Score: ${score}/${total} (${Math.round((score / total) * 100)}%).` : ''}
-
-Questions and user answers:
-${JSON.stringify(
-  Array.isArray(questions)
-    ? questions.map((q: any, i: number) => ({
-        questionNumber: i + 1,
-        question: q.question,
-        correctOption: q.options ? q.options[q.correctAnswer] : q.correctAnswer,
-        userAnswer: userAnswers && userAnswers[i] !== undefined && q.options ? q.options[userAnswers[i]] : (userAnswers && userAnswers[i] !== undefined ? userAnswers[i] : 'Skipped'),
-        isCorrect: userAnswers ? userAnswers[i] === q.correctAnswer : undefined,
-      }))
-    : questions
-)}
-
-Guidelines:
-1. Tone: Maintain a balanced, neutral, and relaxed tone (not strict, harsh, or overly critical). Analyze the results objectively and constructively.
-2. Markdown & LaTeX: Write in structured Markdown with headers and bullet points. Use LaTeX notation for ALL mathematical formulas, variables, and scientific equations (e.g., inline \`$E = mc^2$\`, \`$\\lambda$\`, \`$\\Delta x$\`, or display \`$$\\frac{a}{b}$$\`). Ensure mathematical symbols and expressions render cleanly in LaTeX.
-3. Structure:
-   - ### Overview: A neutral, factual summary of the performance.
-   - ### Strengths: Concepts and problems handled successfully.
-   - ### Concepts to Review: Objective review of any mistakes, explaining the underlying principles with LaTeX formulas where helpful.
-   - ### Study Recommendations: 2-3 straightforward suggestions for further practice.
-
-Respond directly in clean Markdown.`;
-
-        const model = env.GEMINI_MODEL || 'gemini-3.5-flash-lite';
-        const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
-
-        const geminiRes = await fetch(geminiUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt }] }],
-            generationConfig: {
-              temperature: 0.7,
-            },
-          }),
-        });
-
-        if (!geminiRes.ok) {
-          const errText = await geminiRes.text();
-          return jsonResponse({ error: 'Gemini API error', details: errText }, geminiRes.status);
+        try {
+          const responseText = await callGeminiSummarize(
+            env,
+            quizTitle,
+            score,
+            total,
+            questions,
+            userAnswers,
+            apiKey
+          );
+          return jsonResponse({ success: true, data: responseText });
+        } catch (err: any) {
+          return jsonResponse({ error: 'Gemini Summary Failed', details: err.message }, 500);
         }
-
-        const geminiData: any = await geminiRes.json();
-        const responseText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || '';
-
-        return jsonResponse({ success: true, data: responseText });
       }
 
-      // 10. MCP (Model Context Protocol) Endpoint (JSON-RPC 2.0)
-      if (url.pathname === '/api/mcp' && request.method === 'POST') {
-        const rpc = (await request.json()) as any;
-        const { id, method, params } = rpc;
-
-        if (method === 'tools/list') {
+      // 10. MCP (Model Context Protocol) Endpoint (JSON-RPC 2.0 & Discovery Gateway)
+      if (url.pathname === '/api/mcp') {
+        if (request.method === 'GET') {
           return jsonResponse({
-            jsonrpc: '2.0',
-            id,
-            result: {
-              tools: [
-                {
-                  name: 'generate_mcq_quiz',
-                  description: 'Generate an interactive multiple-choice quiz with LaTeX and explanations',
-                  inputSchema: {
-                    type: 'object',
-                    properties: {
-                      topic: { type: 'string', description: 'Subject or chapter topic' },
-                      questionCount: { type: 'number', description: '1 to 30' },
-                      difficulty: { type: 'string', enum: ['Easy', 'Medium', 'Hard'] },
-                      quizStyle: { type: 'string', enum: ['General', 'Conceptual', 'Problem Solving'] },
-                    },
-                    required: ['topic'],
-                  },
-                },
-                {
-                  name: 'get_system_heuristic',
-                  description: 'Check MCQHub system status, edge latency, and health',
-                  inputSchema: { type: 'object' },
-                },
-              ],
+            ok: true,
+            service: 'MCQHub Model Context Protocol (MCP) Edge Server',
+            version: '1.0.0',
+            status: 'online',
+            protocol: 'Model Context Protocol JSON-RPC 2.0',
+            endpoint: 'https://mcqhub.adsbackend01.workers.dev/api/mcp',
+            toolsCount: MCP_TOOLS_DEFINITIONS.length,
+            tools: MCP_TOOLS_DEFINITIONS,
+            clientSetup: {
+              claudeDesktop: {
+                command: 'node',
+                args: ['mcp-server/index.mjs'],
+              },
+              cursor: {
+                type: 'command',
+                command: 'node ./mcp-server/index.mjs',
+              },
+              windsurf: {
+                command: 'node',
+                args: ['./mcp-server/index.mjs'],
+              },
+              antigravity: {
+                server: 'mcqhub-mcp',
+                type: 'stdio',
+              },
             },
           });
         }
 
-        if (method === 'tools/call') {
-          const toolName = params?.name;
-          if (toolName === 'get_system_heuristic') {
-            return jsonResponse({
+        if (request.method === 'POST') {
+          const rpc = (await request.json()) as any;
+
+          // Support batch JSON-RPC or single request
+          const handleSingleRequest = async (req: any) => {
+            const { id, method, params } = req;
+
+            // MCP Handshake: initialize
+            if (method === 'initialize') {
+              return {
+                jsonrpc: '2.0',
+                id,
+                result: {
+                  protocolVersion: '2024-11-05',
+                  capabilities: {
+                    tools: {
+                      listChanged: false,
+                    },
+                  },
+                  serverInfo: {
+                    name: 'mcqhub-mcp-server',
+                    version: '1.0.0',
+                  },
+                },
+              };
+            }
+
+            // MCP Notification: notifications/initialized
+            if (method === 'notifications/initialized') {
+              return null; // Notifications don't require responses in JSON-RPC
+            }
+
+            // MCP Ping
+            if (method === 'ping') {
+              return {
+                jsonrpc: '2.0',
+                id,
+                result: {},
+              };
+            }
+
+            // MCP tools/list
+            if (method === 'tools/list') {
+              return {
+                jsonrpc: '2.0',
+                id,
+                result: {
+                  tools: MCP_TOOLS_DEFINITIONS,
+                },
+              };
+            }
+
+            // MCP tools/call
+            if (method === 'tools/call') {
+              const toolName = params?.name;
+              const toolArgs = params?.arguments || {};
+              const authHeader = request.headers.get('Authorization') || undefined;
+
+              try {
+                const executionResult = await executeMcpTool(env, toolName, toolArgs, cfData, authHeader);
+                return {
+                  jsonrpc: '2.0',
+                  id,
+                  result: {
+                    content: [
+                      {
+                        type: 'text',
+                        text: typeof executionResult === 'string' ? executionResult : JSON.stringify(executionResult, null, 2),
+                      },
+                    ],
+                    isError: false,
+                  },
+                };
+              } catch (execErr: any) {
+                return {
+                  jsonrpc: '2.0',
+                  id,
+                  result: {
+                    content: [
+                      {
+                        type: 'text',
+                        text: `Error executing tool "${toolName}": ${execErr.message}`,
+                      },
+                    ],
+                    isError: true,
+                  },
+                };
+              }
+            }
+
+            // Unknown Method
+            return {
               jsonrpc: '2.0',
               id,
-              result: {
-                content: [
-                  {
-                    type: 'text',
-                    text: JSON.stringify({ status: 'healthy', mcpReady: true, timestamp: new Date().toISOString() }),
-                  },
-                ],
+              error: {
+                code: -32601,
+                message: `Method "${method}" not found on MCQHub MCP Server`,
               },
-            });
+            };
+          };
+
+          if (Array.isArray(rpc)) {
+            const results = (await Promise.all(rpc.map(handleSingleRequest))).filter(Boolean);
+            return jsonResponse(results);
+          } else {
+            const singleResult = await handleSingleRequest(rpc);
+            if (!singleResult) {
+              return new Response(null, { status: 204, headers: CORS_HEADERS });
+            }
+            return jsonResponse(singleResult);
           }
         }
-
-        return jsonResponse({
-          jsonrpc: '2.0',
-          id,
-          error: { code: -32601, message: 'Method not found' },
-        });
       }
 
-      return new Response('MCQHub Worker Gateway Ready (Firestore Edge REST Active)', {
+      return new Response('MCQHub Worker Gateway Ready (Firestore Edge REST & MCP Active)', {
         headers: { ...CORS_HEADERS, 'Content-Type': 'text/plain' },
       });
     } catch (err: any) {

@@ -45,11 +45,13 @@ service cloud.firestore {
 ```
 > **Firebase Console Setup:** Go to **Firebase Console > Firestore Database > Rules**, paste the snippet above, and click **Publish**.
 
-### 3. Cloudflare Workers Edge Gateway & MCP Readiness
-A complete Cloudflare Workers implementation is located in [`cloudflare-worker/`](file:///d:/MCQHub/cloudflare-worker):
-- **Edge AI Proxy:** Ultra-low latency edge gateway invoking Google Gemini 3.5 Flash Lite with CORS headers.
-- **Heuristic Endpoint:** `/api/heuristic` reports Cloudflare edge datacenter colocations (e.g., `BOM`, `LHR`).
-- **MCP Support (Model Context Protocol):** `/api/mcp` implements JSON-RPC 2.0 endpoints for `tools/list` and `tools/call`, enabling external AI assistants (Cursor, Windsurf, Claude Desktop, Antigravity) to synthesize exams and query database status.
+### 3. Cloudflare Workers Edge Gateway & Model Context Protocol (MCP) Server
+A complete Cloudflare Workers implementation is located in [`cloudflare-worker/`](file:///d:/MCQHub/cloudflare-worker), and a local Stdio bridge in [`mcp-server/`](file:///d:/MCQHub/mcp-server):
+- **10-Tool MCP Server:** Implements standard JSON-RPC 2.0 at `https://mcqhub.adsbackend01.workers.dev/api/mcp` and via `node mcp-server/index.mjs` for Claude Desktop, Cursor, Windsurf, and Antigravity.
+- **Autonomous Quiz Generation & Public Sharing:** AI generates assessments via Gemini 3.5 Flash Lite, issues an immutable **5-digit PIN**, saves directly to Firestore, and produces an interactive public URL (`https://mcqhub.pages.dev/?share=30172`).
+- **User Authentication & Personal Library Dispatch:** Supports logging in, registering, and dispatching quizzes directly into student personal libraries from AI chat.
+- **AI Tutor Diagnostic Review:** Objective test feedback with LaTeX mathematical derivations and study recommendations.
+- **Edge Datacenter Health:** `/api/heuristic` reports real-time Cloudflare datacenter colo (e.g., `BOM`, `LHR`) and Firestore millisecond latency.
 
 ### 4. Mathematical Typesetting via KaTeX
 - Native support for inline math `$E = mc^2$` and block math `$$\int_0^\infty e^{-x^2} dx = \frac{\sqrt{\pi}}{2}$$`.

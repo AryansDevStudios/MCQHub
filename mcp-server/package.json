@@ -1,0 +1,31 @@
+{
+  "name": "mcqhub-mcp-server",
+  "version": "1.0.0",
+  "description": "Model Context Protocol (MCP) server for MCQHub - Autonomous AI Quiz Generation, Interactive Sharing, and User Management",
+  "type": "module",
+  "main": "index.mjs",
+  "bin": {
+    "mcqhub-mcp": "./index.mjs"
+  },
+  "scripts": {
+    "start": "node index.mjs",
+    "test": "node index.mjs --test"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "mcqhub",
+    "gemini",
+    "claude",
+    "cursor",
+    "windsurf",
+    "antigravity",
+    "assessment",
+    "quiz"
+  ],
+  "author": "AryansDevStudios",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
