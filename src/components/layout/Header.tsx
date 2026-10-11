@@ -13,12 +13,13 @@ import {
   User,
   Settings,
   Share2,
+  Play,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { ViewState } from '@/lib/types';
 
 export function Header() {
-  const { view, setView, user, setJoinModalOpen } = useQuiz();
+  const { view, setView, user, setJoinModalOpen, activeExamSession, resumeActiveExam } = useQuiz();
   const [authDialogOpen, setAuthDialogOpen] = useState(false);
   const [authDialogTab, setAuthDialogTab] = useState<'auth' | 'settings' | 'sessions'>('auth');
 
@@ -78,9 +79,28 @@ export function Header() {
                       {item.icon}
                     </span>
                     <span className="hidden md:inline text-xs">{item.label}</span>
+                    {item.id === 'home' && activeExamSession && (
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" title="Unsubmitted quiz in progress" />
+                    )}
+                    {item.id === 'history' && activeExamSession && (
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" title="Unsubmitted quiz in progress" />
+                    )}
                   </button>
                 );
               })}
+
+              {/* Green Resume Button (Only displayed when a quiz is unsubmitted; disappears when submitted) */}
+              {activeExamSession && (
+                <button
+                  type="button"
+                  onClick={resumeActiveExam}
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white shadow-xs animate-in fade-in transition-all shrink-0 ml-0.5"
+                  title={`Resume unsubmitted test: "${activeExamSession.quiz.title}"`}
+                >
+                  <Play className="w-3.5 h-3.5 fill-current" />
+                  <span className="hidden sm:inline text-xs">Resume</span>
+                </button>
+              )}
             </nav>
           </div>
 

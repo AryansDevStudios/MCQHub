@@ -21,6 +21,7 @@ import {
   Trash2,
   Calendar,
   RefreshCw,
+  Play,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { QuizAttempt } from '@/lib/types';
@@ -36,6 +37,9 @@ export function HistoryView() {
     isSyncing,
     syncLibraryWithCloud,
     lastSyncTime,
+    activeExamSession,
+    resumeActiveExam,
+    discardActiveExam,
   } = useQuiz();
 
   const [showClearDialog, setShowClearDialog] = useState(false);
@@ -101,22 +105,88 @@ export function HistoryView() {
         </div>
       </div>
 
+      {/* Unsubmitted Active Test (Displayed on History page when any test is unsubmitted) */}
+      {activeExamSession && (
+        <div className="rounded-xl border border-emerald-500/40 bg-card p-4 sm:p-5 shadow-sm space-y-3 animate-in fade-in transition-all relative overflow-hidden">
+          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-emerald-500 to-teal-400" />
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 pt-1">
+            <div className="space-y-1.5 min-w-0">
+              <div className="flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+                <Badge className="bg-emerald-500/15 text-emerald-500 border border-emerald-500/30 text-[10px] px-2 py-0.5 font-medium">
+                  Unsubmitted Quiz (In Progress)
+                </Badge>
+                <span className="text-xs text-muted-foreground font-mono">
+                  Question {(activeExamSession.currentQuestionIndex || 0) + 1} of {activeExamSession.quiz.questions.length}
+                </span>
+              </div>
+              <h2 className="text-base sm:text-lg font-bold text-foreground leading-snug">
+                {activeExamSession.quiz.title}
+              </h2>
+              <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+                <span>
+                  Answered <strong>{Object.keys(activeExamSession.userAnswers || {}).length}</strong> of {activeExamSession.quiz.questions.length} questions
+                </span>
+                <span>•</span>
+                <span>
+                  Progress: {Math.round((Object.keys(activeExamSession.userAnswers || {}).length / activeExamSession.quiz.questions.length) * 100)}%
+                </span>
+                {activeExamSession.elapsedSeconds > 0 && (
+                  <>
+                    <span>•</span>
+                    <span className="font-mono">
+                      Elapsed: {Math.floor(activeExamSession.elapsedSeconds / 60)}m {activeExamSession.elapsedSeconds % 60}s
+                    </span>
+                  </>
+                )}
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={discardActiveExam}
+                className="h-8 text-xs text-muted-foreground hover:text-rose-500 hover:border-rose-500/40"
+              >
+                Discard
+              </Button>
+              <Button
+                size="sm"
+                onClick={resumeActiveExam}
+                className="h-8 text-xs bg-emerald-600 hover:bg-emerald-500 text-white font-semibold gap-1.5 px-4 shadow-sm"
+              >
+                <Play className="w-3.5 h-3.5 fill-current" />
+                <span>Resume Quiz</span>
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Attempts List */}
       {history.length === 0 ? (
-        <div className="py-16 text-center rounded-xl border border-dashed border-border/70 p-6 space-y-3">
-          <div className="w-10 h-10 rounded-full bg-muted/50 flex items-center justify-center mx-auto text-muted-foreground">
-            <HistoryIcon className="w-5 h-5" />
+        !activeExamSession && (
+          <div className="py-16 text-center rounded-xl border border-dashed border-border/70 p-6 space-y-3">
+            <div className="w-10 h-10 rounded-full bg-muted/50 flex items-center justify-center mx-auto text-muted-foreground">
+              <HistoryIcon className="w-5 h-5" />
+            </div>
+            <h3 className="text-sm font-semibold text-foreground">No completed quiz attempts yet</h3>
+            <p className="text-xs text-muted-foreground max-w-sm mx-auto">
+              Take a practice quiz or start one from your Library to see your scores and feedback here.
+            </p>
+            <Button size="sm" onClick={() => setView('home')} className="h-8 text-xs font-medium">
+              Create a Quiz
+            </Button>
           </div>
-          <h3 className="text-sm font-semibold text-foreground">No quiz attempts yet</h3>
-          <p className="text-xs text-muted-foreground max-w-sm mx-auto">
-            Take a practice quiz or start one from your Library to see your scores and feedback here.
-          </p>
-          <Button size="sm" onClick={() => setView('home')} className="h-8 text-xs font-medium">
-            Create a Quiz
-          </Button>
-        </div>
+        )
       ) : (
         <div className="space-y-3">
+          {activeExamSession && (
+            <div className="text-xs font-semibold text-muted-foreground pt-1">
+              Completed Quiz History ({history.length})
+            </div>
+          )}
           {history.map((attempt) => {
             const pct = Math.round((attempt.score / attempt.total) * 100);
             const isHigh = pct >= 80;

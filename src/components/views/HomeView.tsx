@@ -172,15 +172,16 @@ export function HomeView() {
   return (
     <div className="max-w-3xl mx-auto px-3 sm:px-6 py-6 pb-20 space-y-6">
       
-      {/* Unsubmitted Active Test (Prominently displayed at the very beginning of the front panel) */}
+      {/* Unsubmitted Active Test (Prominently displayed in Create Practice Menu) */}
       {activeExamSession && (
-        <div className="rounded-xl border border-primary/40 bg-card p-4 sm:p-5 shadow-sm space-y-3 animate-in fade-in transition-all">
-          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+        <div className="rounded-xl border border-emerald-500/40 bg-card p-4 sm:p-5 shadow-sm space-y-3 animate-in fade-in transition-all relative overflow-hidden">
+          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-emerald-500 to-teal-400" />
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 pt-1">
             <div className="space-y-1.5 min-w-0">
               <div className="flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-primary animate-pulse shrink-0" />
-                <Badge className="bg-primary/15 text-primary border border-primary/30 text-[10px] px-2 py-0.5 font-medium">
-                  Unsubmitted Test
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+                <Badge className="bg-emerald-500/15 text-emerald-500 border border-emerald-500/30 text-[10px] px-2 py-0.5 font-medium">
+                  Unsubmitted Quiz (In Progress)
                 </Badge>
                 <span className="text-xs text-muted-foreground font-mono">
                   Question {(activeExamSession.currentQuestionIndex || 0) + 1} of {activeExamSession.quiz.questions.length}
@@ -189,7 +190,7 @@ export function HomeView() {
               <h2 className="text-base sm:text-lg font-bold text-foreground leading-snug">
                 {activeExamSession.quiz.title}
               </h2>
-              <div className="flex items-center gap-3 text-xs text-muted-foreground">
+              <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
                 <span>
                   Answered <strong>{Object.keys(activeExamSession.userAnswers || {}).length}</strong> of {activeExamSession.quiz.questions.length} questions
                 </span>
@@ -197,6 +198,14 @@ export function HomeView() {
                 <span>
                   Progress: {Math.round((Object.keys(activeExamSession.userAnswers || {}).length / activeExamSession.quiz.questions.length) * 100)}%
                 </span>
+                {activeExamSession.elapsedSeconds > 0 && (
+                  <>
+                    <span>•</span>
+                    <span className="font-mono">
+                      Elapsed: {Math.floor(activeExamSession.elapsedSeconds / 60)}m {activeExamSession.elapsedSeconds % 60}s
+                    </span>
+                  </>
+                )}
               </div>
             </div>
 
@@ -212,7 +221,7 @@ export function HomeView() {
               <Button
                 size="sm"
                 onClick={resumeActiveExam}
-                className="h-8 text-xs bg-primary text-primary-foreground font-semibold gap-1.5 px-4 shadow-sm"
+                className="h-8 text-xs bg-emerald-600 hover:bg-emerald-500 text-white font-semibold gap-1.5 px-4 shadow-sm"
               >
                 <Play className="w-3.5 h-3.5 fill-current" />
                 <span>Resume Test</span>
