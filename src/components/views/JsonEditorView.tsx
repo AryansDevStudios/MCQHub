@@ -235,9 +235,9 @@ export function JsonEditorView() {
                   <div className="w-2.5 h-2.5 rounded-full bg-amber-500/80" />
                   <div className="w-2.5 h-2.5 rounded-full bg-emerald-500/80" />
                 </div>
-                <span className="text-muted-foreground ml-1 font-mono text-[11px]">questions.json</span>
+                <span className="text-muted-foreground ml-1 text-[11px] font-medium">Question Data</span>
               </div>
-              <span className="text-[11px] text-muted-foreground">UTF-8 JSON</span>
+              <span className="text-[11px] text-muted-foreground">JSON Editor</span>
             </div>
 
             {/* Code Textarea */}

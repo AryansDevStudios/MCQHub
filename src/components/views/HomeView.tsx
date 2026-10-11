@@ -25,7 +25,16 @@ import type { Quiz } from '@/lib/types';
 const STORAGE_API_KEY = 'mcqhub_gemini_api_key';
 
 export function HomeView() {
-  const { startQuiz, saveQuizToLibrary, setView, setEditorJsonBuffer, addToast } = useQuiz();
+  const {
+    startQuiz,
+    saveQuizToLibrary,
+    setView,
+    setEditorJsonBuffer,
+    addToast,
+    activeExamSession,
+    resumeActiveExam,
+    discardActiveExam,
+  } = useQuiz();
 
   const [topic, setTopic] = useState('');
   const [questionCount, setQuestionCount] = useState(5);
@@ -129,6 +138,46 @@ export function HomeView() {
           Generate multiple-choice practice questions on any topic in seconds. Formatted with math equations and diagrams.
         </p>
       </div>
+
+      {/* Cross-Device Live Resume Banner */}
+      {activeExamSession && (
+        <div className="rounded-lg border border-primary/40 bg-primary/10 p-4 space-y-2 shadow-xs transition-all">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <Badge className="bg-primary text-primary-foreground text-[10px] px-1.5 py-0">
+                  Quiz In Progress
+                </Badge>
+                <span className="text-xs font-semibold text-foreground truncate max-w-[280px]">
+                  {activeExamSession.quiz.title}
+                </span>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Answered {Object.keys(activeExamSession.userAnswers || {}).length} of {activeExamSession.quiz.questions.length} questions • Left off at Question {(activeExamSession.currentQuestionIndex || 0) + 1}
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0">
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={discardActiveExam}
+                className="h-8 text-xs text-muted-foreground hover:text-rose-500 hover:bg-rose-500/10"
+              >
+                Discard
+              </Button>
+              <Button
+                size="sm"
+                onClick={resumeActiveExam}
+                className="h-8 text-xs bg-primary text-primary-foreground font-semibold gap-1.5 px-3.5"
+              >
+                <Play className="w-3.5 h-3.5 fill-current" />
+                <span>Resume Quiz</span>
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Main Generator Card */}
       <div className="rounded-lg border border-border bg-card shadow-xs overflow-hidden">

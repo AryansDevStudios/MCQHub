@@ -2,10 +2,10 @@
 
 import React from 'react';
 import { useQuiz } from '@/context/QuizProvider';
-import { Cloud, CloudCheck, User, Sparkles } from 'lucide-react';
+import { Cloud, User } from 'lucide-react';
 
 export function StatusBar() {
-  const { user, isSyncing, activeQuiz, currentQuestionIndex } = useQuiz();
+  const { user, isSyncing, view, activeQuiz, currentQuestionIndex, activeExamSession, resumeActiveExam } = useQuiz();
 
   return (
     <footer className="fixed bottom-0 left-0 right-0 z-30 h-6 bg-muted/40 border-t border-border/80 px-3 text-[11px] text-muted-foreground flex items-center justify-between select-none backdrop-blur-xs">
@@ -19,12 +19,27 @@ export function StatusBar() {
         </div>
 
         {/* Active Exam Progress */}
-        {activeQuiz && (
+        {view === 'quiz' && activeQuiz && (
           <>
             <span className="text-border">|</span>
             <span className="text-primary font-medium">
               Question {currentQuestionIndex + 1} of {activeQuiz.questions.length}
             </span>
+          </>
+        )}
+
+        {/* Cross-device in-progress quiz prompt if navigated away */}
+        {view !== 'quiz' && activeExamSession && (
+          <>
+            <span className="text-border">|</span>
+            <button
+              type="button"
+              onClick={resumeActiveExam}
+              className="text-primary font-medium hover:underline flex items-center gap-1 cursor-pointer"
+              title="Click to resume your active quiz"
+            >
+              Resume: {activeExamSession.quiz.title} ({Object.keys(activeExamSession.userAnswers || {}).length}/{activeExamSession.quiz.questions.length})
+            </button>
           </>
         )}
       </div>

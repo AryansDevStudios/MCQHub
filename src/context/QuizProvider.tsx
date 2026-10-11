@@ -10,6 +10,7 @@ import type {
   UserProfile,
   UserSession,
   HeuristicStatus,
+  ActiveExamSession,
 } from '@/lib/types';
 import {
   runFirestoreHeuristic,
@@ -18,6 +19,8 @@ import {
   saveUserQuizzesFirestore,
   saveUserHistoryFirestore,
   fetchUserDataFirestore,
+  saveActiveExamFirestore,
+  fetchActiveExamFirestore,
 } from '@/lib/firestoreDb';
 
 interface QuizContextType {
@@ -56,6 +59,11 @@ interface QuizContextType {
   checkedQuestions: Record<number, boolean>;
   elapsedSeconds: number;
   isTimerRunning: boolean;
+
+  // Live Cross-Device Active Exam Sync
+  activeExamSession: ActiveExamSession | null;
+  resumeActiveExam: () => void;
+  discardActiveExam: () => void;
 
   // Quiz Actions
   startQuiz: (quiz: Quiz, instant?: boolean) => void;
@@ -98,6 +106,7 @@ const STORAGE_KEYS = {
   LOCAL_HISTORY: 'mcqhub_local_history',
   DELETED_QUIZZES: 'mcqhub_deleted_quizzes',
   LAST_SYNC: 'mcqhub_last_sync',
+  ACTIVE_EXAM: 'mcqhub_active_exam',
 };
 
 export function QuizProvider({ children }: { children: React.ReactNode }) {
@@ -129,14 +138,23 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
   const [elapsedSeconds, setElapsedSeconds] = useState<number>(0);
   const [isTimerRunning, setIsTimerRunning] = useState<boolean>(false);
 
+  // In-progress active exam session (persisted across devices)
+  const [activeExamSession, setActiveExamSession] = useState<ActiveExamSession | null>(null);
+
   // JSON editor buffer
   const [editorJsonBuffer, setEditorJsonBuffer] = useState<string>('');
 
   // Notifications
   const [toasts, setToasts] = useState<Toast[]>([]);
 
-  // Timer interval ref
+  // Refs for tracking synchronization state without re-render race conditions
+  const userRef = useRef<UserProfile | null>(null);
+  userRef.current = user;
+
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const lastLocalUpdateRef = useRef<number>(0);
+  const syncExamTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const isSyncingExamRef = useRef<boolean>(false);
 
   // Toast utilities
   const addToast = useCallback((message: string, type: 'success' | 'error' | 'info' = 'info') => {
@@ -152,11 +170,42 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
   };
 
   /**
+   * Immediately persist active exam state to localStorage and push to Cloud Firestore
+   */
+  const persistActiveExam = useCallback(
+    (session: ActiveExamSession | null) => {
+      lastLocalUpdateRef.current = Date.now();
+      setActiveExamSession(session);
+
+      if (typeof window !== 'undefined') {
+        if (session) {
+          localStorage.setItem(STORAGE_KEYS.ACTIVE_EXAM, JSON.stringify(session));
+        } else {
+          localStorage.removeItem(STORAGE_KEYS.ACTIVE_EXAM);
+        }
+      }
+
+      // Fast cloud sync if user is signed in
+      if (syncExamTimerRef.current) clearTimeout(syncExamTimerRef.current);
+      syncExamTimerRef.current = setTimeout(async () => {
+        const currentUser = userRef.current;
+        if (currentUser && typeof navigator !== 'undefined' && navigator.onLine) {
+          isSyncingExamRef.current = true;
+          try {
+            await saveActiveExamFirestore(currentUser.username, session);
+          } catch (err: any) {
+            console.warn('Active exam cloud push notice:', err?.message);
+          } finally {
+            isSyncingExamRef.current = false;
+          }
+        }
+      }, 150);
+    },
+    []
+  );
+
+  /**
    * Smart Two-Way Reconciliation with Cloud Firestore
-   * - Aligns local storage & Firestore on app refresh / network reconnect / library tab click.
-   * - Preserves locally generated offline tests and pushes them to Firestore.
-   * - Pulls new tests added from other devices (mobile, laptop).
-   * - Does NOT poll constantly in the background.
    */
   const syncLibraryWithCloud = useCallback(
     async (silent: boolean = false, usernameOverride?: string) => {
@@ -184,7 +233,6 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
           }
         } catch {}
 
-        // Read current local quizzes from storage for most accurate snapshot
         let currentLocalQuizzes: Quiz[] = [];
         try {
           const rawLocal = localStorage.getItem(STORAGE_KEYS.LOCAL_QUIZZES);
@@ -195,51 +243,29 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
 
         // 2. Reconcile Quizzes
         const mergedQuizzesMap = new Map<string, Quiz>();
-
-        // Add valid cloud quizzes
         for (const q of cloudQuizzes) {
-          const key = q.id || q.title;
-          if (!deletedQuizIds.has(key) && !deletedQuizIds.has(q.title)) {
-            mergedQuizzesMap.set(key, q);
+          const id = q.id || q.title;
+          if (!deletedQuizIds.has(id) && !deletedQuizIds.has(q.title)) {
+            mergedQuizzesMap.set(id, q);
           }
         }
 
-        // Merge local quizzes (pulling in any generated offline or pending upload)
         let needsCloudQuizUpdate = false;
-        for (const q of currentLocalQuizzes) {
-          const key = q.id || q.title;
-          if (deletedQuizIds.has(key) || deletedQuizIds.has(q.title)) {
-            continue;
-          }
-          if (!mergedQuizzesMap.has(key)) {
-            // Local has a quiz that Firestore is missing!
-            mergedQuizzesMap.set(key, q);
+        for (const localQ of currentLocalQuizzes) {
+          const id = localQ.id || localQ.title;
+          if (deletedQuizIds.has(id) || deletedQuizIds.has(localQ.title)) continue;
+          if (!mergedQuizzesMap.has(id)) {
+            mergedQuizzesMap.set(id, localQ);
             needsCloudQuizUpdate = true;
-          } else {
-            // If both have it, keep the one with questions or newest timestamp
-            const existing = mergedQuizzesMap.get(key)!;
-            if (
-              (!existing.questions || existing.questions.length === 0) &&
-              (q.questions && q.questions.length > 0)
-            ) {
-              mergedQuizzesMap.set(key, q);
-              needsCloudQuizUpdate = true;
-            }
           }
         }
-
-        // If items were deleted, Cloud needs to be updated
-        if (deletedQuizIds.size > 0) {
-          needsCloudQuizUpdate = true;
-        }
-
         const reconciledQuizzes = Array.from(mergedQuizzesMap.values());
 
         // 3. Reconcile History
         let currentLocalHistory: QuizAttempt[] = [];
         try {
-          const rawHist = localStorage.getItem(STORAGE_KEYS.LOCAL_HISTORY);
-          if (rawHist) currentLocalHistory = JSON.parse(rawHist);
+          const rawHistory = localStorage.getItem(STORAGE_KEYS.LOCAL_HISTORY);
+          if (rawHistory) currentLocalHistory = JSON.parse(rawHistory);
         } catch {
           currentLocalHistory = history;
         }
@@ -264,6 +290,15 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
         setHistory(reconciledHistory);
         localStorage.setItem(STORAGE_KEYS.LOCAL_HISTORY, JSON.stringify(reconciledHistory));
 
+        // Reconcile Active Exam from Cloud
+        if (cloudRes.activeExam) {
+          const remoteTime = new Date(cloudRes.activeExam.updatedAt).getTime();
+          if (remoteTime > lastLocalUpdateRef.current) {
+            setActiveExamSession(cloudRes.activeExam);
+            localStorage.setItem(STORAGE_KEYS.ACTIVE_EXAM, JSON.stringify(cloudRes.activeExam));
+          }
+        }
+
         // 5. If local had new items or deletions, align Firestore in one update
         if (needsCloudQuizUpdate) {
           await saveUserQuizzesFirestore(activeUsername, reconciledQuizzes);
@@ -278,11 +313,11 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
         localStorage.setItem(STORAGE_KEYS.LAST_SYNC, syncTimestamp);
 
         if (!silent) {
-          addToast(`Library aligned with Cloud Firestore (${reconciledQuizzes.length} tests)`, 'success');
+          addToast(`Library aligned with cloud (${reconciledQuizzes.length} quizzes)`, 'success');
         }
       } catch (err: any) {
         console.warn('Sync with cloud failed:', err?.message);
-        if (!silent) addToast('Sync failed: ' + (err?.message || 'Network error'), 'error');
+        if (!silent) addToast('Sync notice: ' + (err?.message || 'Network unreachable'), 'info');
       } finally {
         setIsSyncing(false);
       }
@@ -294,7 +329,6 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
   const setView = (newView: ViewState) => {
     setViewState(newView);
     if ((newView === 'library' || newView === 'history') && user) {
-      // Fetch and align once upon opening the tab
       syncLibraryWithCloud(true);
     }
   };
@@ -330,14 +364,21 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
 
       const cachedLastSync = localStorage.getItem(STORAGE_KEYS.LAST_SYNC);
       if (cachedLastSync) setLastSyncTime(cachedLastSync);
+
+      // Hydrate Active In-Progress Exam from local storage
+      const cachedActiveExam = localStorage.getItem(STORAGE_KEYS.ACTIVE_EXAM);
+      if (cachedActiveExam) {
+        const parsed: ActiveExamSession = JSON.parse(cachedActiveExam);
+        setActiveExamSession(parsed);
+      }
     } catch (e) {
       console.warn('Error reading localStorage initial state:', e);
     }
 
-    // Single Heuristic Check on start
+    // Heuristic Check on start
     runInitialHeuristic();
 
-    // Single Alignment Sync with Firestore on start (once per app refresh)
+    // Alignment Sync with Firestore on start (once per app refresh)
     if (cachedUser) {
       syncLibraryWithCloud(true, cachedUser.username);
     }
@@ -348,13 +389,61 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const handleOnline = () => {
       if (user) {
-        addToast('Internet connection restored. Aligning library with Firestore...', 'info');
+        addToast('Internet connection restored. Syncing with cloud...', 'info');
         syncLibraryWithCloud(false);
       }
     };
     window.addEventListener('online', handleOnline);
     return () => window.removeEventListener('online', handleOnline);
   }, [user, syncLibraryWithCloud, addToast]);
+
+  // 3. Cross-Device Live Active Exam Sync Polling (every 3.5s & on window focus)
+  useEffect(() => {
+    if (!user) return;
+
+    const pullActiveExam = async () => {
+      if (!userRef.current || isSyncingExamRef.current) return;
+      try {
+        const remote = await fetchActiveExamFirestore(userRef.current.username);
+        if (!remote) {
+          // If remote was finished or discarded on another device
+          if (activeExamSession && Date.now() - lastLocalUpdateRef.current > 4000) {
+            setActiveExamSession(null);
+            if (activeQuiz) {
+              setActiveQuiz(null);
+              setIsTimerRunning(false);
+            }
+            localStorage.removeItem(STORAGE_KEYS.ACTIVE_EXAM);
+          }
+          return;
+        }
+
+        const remoteTime = new Date(remote.updatedAt).getTime();
+        // If remote is newer than our local interaction by > 200ms, sync into view!
+        if (remoteTime > lastLocalUpdateRef.current + 200) {
+          setActiveExamSession(remote);
+          localStorage.setItem(STORAGE_KEYS.ACTIVE_EXAM, JSON.stringify(remote));
+
+          // If the user has this quiz currently active on screen, live-update answers and progress!
+          if (activeQuiz && activeQuiz.title === remote.quiz.title) {
+            setUserAnswers(remote.userAnswers || {});
+            setCurrentQuestionIndex(remote.currentQuestionIndex || 0);
+            setCheckedQuestions(remote.checkedQuestions || {});
+            setQuestionNotes(remote.questionNotes || {});
+          }
+        }
+      } catch {}
+    };
+
+    const interval = setInterval(pullActiveExam, 3500);
+    const handleFocus = () => pullActiveExam();
+    window.addEventListener('focus', handleFocus);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', handleFocus);
+    };
+  }, [user, activeQuiz, activeExamSession]);
 
   const runInitialHeuristic = async () => {
     setIsCheckingHeuristic(true);
@@ -431,6 +520,12 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
       localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(result.profile));
       localStorage.setItem(STORAGE_KEYS.SESSION, JSON.stringify(result.session));
 
+      // Restore active exam from cloud if present
+      if (result.activeExam) {
+        setActiveExamSession(result.activeExam);
+        localStorage.setItem(STORAGE_KEYS.ACTIVE_EXAM, JSON.stringify(result.activeExam));
+      }
+
       // Trigger alignment sync immediately upon login
       await syncLibraryWithCloud(true, result.profile.username);
 
@@ -459,12 +554,7 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
       localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(result.profile));
       localStorage.setItem(STORAGE_KEYS.SESSION, JSON.stringify(result.session));
 
-      // If user had local quizzes generated prior to registering, sync them to the new account!
-      if (savedQuizzes.length > 0) {
-        await saveUserQuizzesFirestore(result.profile.username, savedQuizzes);
-      }
-
-      addToast(`Account created for ${result.profile.displayName}`, 'success');
+      addToast(`Account created! Logged in as ${result.profile.displayName}`, 'success');
       return { success: true };
     } catch (err: any) {
       const msg = err?.message || 'Registration encountered an error';
@@ -504,15 +594,77 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
     setElapsedSeconds(0);
     setIsTimerRunning(true);
     setViewState('quiz');
+
+    // Create and persist active exam session immediately
+    const session: ActiveExamSession = {
+      quiz: cloned,
+      userAnswers: {},
+      currentQuestionIndex: 0,
+      elapsedSeconds: 0,
+      isInstantMode: instant,
+      checkedQuestions: {},
+      questionNotes: {},
+      updatedAt: new Date().toISOString(),
+    };
+    persistActiveExam(session);
   };
 
+  /**
+   * Resume active in-progress quiz from where you left off
+   */
+  const resumeActiveExam = () => {
+    if (!activeExamSession) return;
+    setActiveQuiz(activeExamSession.quiz);
+    setUserAnswers(activeExamSession.userAnswers || {});
+    setCurrentQuestionIndex(activeExamSession.currentQuestionIndex || 0);
+    setElapsedSeconds(activeExamSession.elapsedSeconds || 0);
+    setIsInstantMode(!!activeExamSession.isInstantMode);
+    setCheckedQuestions(activeExamSession.checkedQuestions || {});
+    setQuestionNotes(activeExamSession.questionNotes || {});
+    setIsTimerRunning(true);
+    setViewState('quiz');
+    addToast(`Resumed "${activeExamSession.quiz.title}" at Question ${(activeExamSession.currentQuestionIndex || 0) + 1}`, 'info');
+  };
+
+  /**
+   * Discard active in-progress quiz from both device and cloud
+   */
+  const discardActiveExam = () => {
+    persistActiveExam(null);
+    setActiveQuiz(null);
+    setUserAnswers({});
+    setCurrentQuestionIndex(0);
+    setIsTimerRunning(false);
+    addToast('In-progress quiz discarded', 'info');
+  };
+
+  /**
+   * Option Selection:
+   * Immediate logging to the database as soon as an option is clicked,
+   * without requiring Next or Submit.
+   */
   const selectAnswer = (questionIndex: number, optionIndex: number) => {
     if (isInstantMode && checkedQuestions[questionIndex]) return;
 
-    setUserAnswers((prev) => ({
-      ...prev,
+    const updatedAnswers = {
+      ...userAnswers,
       [questionIndex]: optionIndex,
-    }));
+    };
+    setUserAnswers(updatedAnswers);
+
+    if (activeQuiz) {
+      const session: ActiveExamSession = {
+        quiz: activeQuiz,
+        userAnswers: updatedAnswers,
+        currentQuestionIndex: questionIndex,
+        elapsedSeconds,
+        isInstantMode,
+        checkedQuestions,
+        questionNotes,
+        updatedAt: new Date().toISOString(),
+      };
+      persistActiveExam(session);
+    }
   };
 
   const checkAnswer = (questionIndex: number) => {
@@ -520,10 +672,25 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
       addToast('Please choose an answer first', 'info');
       return;
     }
-    setCheckedQuestions((prev) => ({
-      ...prev,
+    const updatedChecked = {
+      ...checkedQuestions,
       [questionIndex]: true,
-    }));
+    };
+    setCheckedQuestions(updatedChecked);
+
+    if (activeQuiz) {
+      const session: ActiveExamSession = {
+        quiz: activeQuiz,
+        userAnswers,
+        currentQuestionIndex: questionIndex,
+        elapsedSeconds,
+        isInstantMode,
+        checkedQuestions: updatedChecked,
+        questionNotes,
+        updatedAt: new Date().toISOString(),
+      };
+      persistActiveExam(session);
+    }
   };
 
   const shuffleOptions = (questionIndex: number) => {
@@ -552,37 +719,97 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
 
     setActiveQuiz(updatedQuiz);
 
-    setUserAnswers((prev) => {
-      const copy = { ...prev };
-      delete copy[questionIndex];
-      return copy;
-    });
+    const updatedAnswers = { ...userAnswers };
+    delete updatedAnswers[questionIndex];
+    setUserAnswers(updatedAnswers);
+
+    const session: ActiveExamSession = {
+      quiz: updatedQuiz,
+      userAnswers: updatedAnswers,
+      currentQuestionIndex: questionIndex,
+      elapsedSeconds,
+      isInstantMode,
+      checkedQuestions,
+      questionNotes,
+      updatedAt: new Date().toISOString(),
+    };
+    persistActiveExam(session);
 
     addToast('Options randomized for Question ' + (questionIndex + 1), 'info');
   };
 
   const saveQuestionNote = (questionIndex: number, note: string) => {
-    setQuestionNotes((prev) => ({
-      ...prev,
+    const updatedNotes = {
+      ...questionNotes,
       [questionIndex]: note,
-    }));
+    };
+    setQuestionNotes(updatedNotes);
+
+    if (activeQuiz) {
+      const session: ActiveExamSession = {
+        quiz: activeQuiz,
+        userAnswers,
+        currentQuestionIndex: questionIndex,
+        elapsedSeconds,
+        isInstantMode,
+        checkedQuestions,
+        questionNotes: updatedNotes,
+        updatedAt: new Date().toISOString(),
+      };
+      persistActiveExam(session);
+    }
   };
 
   const goToQuestion = (index: number) => {
     if (activeQuiz && index >= 0 && index < activeQuiz.questions.length) {
       setCurrentQuestionIndex(index);
+      const session: ActiveExamSession = {
+        quiz: activeQuiz,
+        userAnswers,
+        currentQuestionIndex: index,
+        elapsedSeconds,
+        isInstantMode,
+        checkedQuestions,
+        questionNotes,
+        updatedAt: new Date().toISOString(),
+      };
+      persistActiveExam(session);
     }
   };
 
   const nextQuestion = () => {
     if (activeQuiz && currentQuestionIndex < activeQuiz.questions.length - 1) {
-      setCurrentQuestionIndex((prev) => prev + 1);
+      const nextIdx = currentQuestionIndex + 1;
+      setCurrentQuestionIndex(nextIdx);
+      const session: ActiveExamSession = {
+        quiz: activeQuiz,
+        userAnswers,
+        currentQuestionIndex: nextIdx,
+        elapsedSeconds,
+        isInstantMode,
+        checkedQuestions,
+        questionNotes,
+        updatedAt: new Date().toISOString(),
+      };
+      persistActiveExam(session);
     }
   };
 
   const prevQuestion = () => {
     if (currentQuestionIndex > 0) {
-      setCurrentQuestionIndex((prev) => prev - 1);
+      const prevIdx = currentQuestionIndex - 1;
+      setCurrentQuestionIndex(prevIdx);
+      const session: ActiveExamSession = {
+        quiz: activeQuiz,
+        userAnswers,
+        currentQuestionIndex: prevIdx,
+        elapsedSeconds,
+        isInstantMode,
+        checkedQuestions,
+        questionNotes,
+        updatedAt: new Date().toISOString(),
+      };
+      persistActiveExam(session);
     }
   };
 
@@ -619,6 +846,9 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
     setHistory(newHistory);
     localStorage.setItem(STORAGE_KEYS.LOCAL_HISTORY, JSON.stringify(newHistory));
 
+    // Clear active in-progress exam from cloud and device!
+    persistActiveExam(null);
+
     // If user is logged in, sync attempt to Firestore in background
     if (user && typeof navigator !== 'undefined' && navigator.onLine) {
       saveUserHistoryFirestore(user.username, newHistory).catch(() => {});
@@ -637,6 +867,18 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
     setElapsedSeconds(0);
     setIsTimerRunning(true);
     setViewState('quiz');
+
+    const session: ActiveExamSession = {
+      quiz: activeQuiz,
+      userAnswers: {},
+      currentQuestionIndex: 0,
+      elapsedSeconds: 0,
+      isInstantMode,
+      checkedQuestions: {},
+      questionNotes: {},
+      updatedAt: new Date().toISOString(),
+    };
+    persistActiveExam(session);
   };
 
   // Immediate Local Persistence with Background Cloud Sync
@@ -767,6 +1009,9 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
         checkedQuestions,
         elapsedSeconds,
         isTimerRunning,
+        activeExamSession,
+        resumeActiveExam,
+        discardActiveExam,
         startQuiz,
         selectAnswer,
         checkAnswer,

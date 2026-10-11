@@ -5,22 +5,19 @@ import { useQuiz } from '@/context/QuizProvider';
 import { Logo } from '@/components/icons';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { UserAuthDialog } from '@/components/auth/UserAuthDialog';
-import { Button } from '@/components/ui/button';
 import {
   Sparkles,
   FileCode2,
   BookmarkCheck,
   History,
   User,
-  PlayCircle,
-  BarChart2,
   Settings,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { ViewState } from '@/lib/types';
 
 export function Header() {
-  const { view, setView, user, activeQuiz } = useQuiz();
+  const { view, setView, user } = useQuiz();
   const [authDialogOpen, setAuthDialogOpen] = useState(false);
   const [authDialogTab, setAuthDialogTab] = useState<'auth' | 'settings' | 'sessions'>('auth');
 
@@ -53,7 +50,7 @@ export function Header() {
                 <Logo className="w-4 h-4" />
               </div>
               <span className="font-bold text-sm tracking-tight text-foreground hidden sm:inline">
-                MCQHub<span className="text-primary font-bold">.io</span>
+                MCQHub
               </span>
             </button>
 
@@ -83,35 +80,6 @@ export function Header() {
                   </button>
                 );
               })}
-
-              {/* Dynamic Active Exam Tab */}
-              {activeQuiz && (
-                <button
-                  onClick={() => setView('quiz')}
-                  className={cn(
-                    'flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-all',
-                    view === 'quiz'
-                      ? 'bg-primary/20 text-primary border border-primary/40 font-semibold'
-                      : 'text-primary/80 hover:text-primary hover:bg-primary/10'
-                  )}
-                  title="Current Active Exam"
-                >
-                  <PlayCircle className="w-3.5 h-3.5" />
-                  <span className="hidden md:inline text-xs truncate max-w-[90px]">Exam</span>
-                </button>
-              )}
-
-              {/* Dynamic Results Tab */}
-              {view === 'results' && (
-                <button
-                  onClick={() => setView('results')}
-                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-semibold shadow-xs"
-                  title="Assessment Results"
-                >
-                  <BarChart2 className="w-3.5 h-3.5" />
-                  <span className="hidden md:inline text-xs">Results</span>
-                </button>
-              )}
             </nav>
           </div>
 

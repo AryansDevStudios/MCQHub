@@ -25,6 +25,17 @@ export interface QuizAttempt {
   questionNotes: Record<number, string>;
 }
 
+export interface ActiveExamSession {
+  quiz: Quiz;
+  userAnswers: Record<number, number>;
+  currentQuestionIndex: number;
+  elapsedSeconds: number;
+  isInstantMode: boolean;
+  checkedQuestions: Record<number, boolean>;
+  questionNotes: Record<number, string>;
+  updatedAt: string; // ISO date string
+}
+
 export type ViewState = 'home' | 'editor' | 'quiz' | 'results' | 'library' | 'history';
 
 export interface Toast {

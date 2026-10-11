@@ -19,6 +19,7 @@ import {
   Send,
   Lightbulb,
   Check,
+  Cloud,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -41,6 +42,7 @@ export function QuizView() {
     prevQuestion,
     finishQuiz,
     setView,
+    user,
   } = useQuiz();
 
   const [showNoteInput, setShowNoteInput] = useState(false);
@@ -77,7 +79,7 @@ export function QuizView() {
       {/* Top Header Strip */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-border/80 pb-3">
         <div className="space-y-0.5">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <span className="font-mono text-xs text-primary font-semibold">
               Question {currentQuestionIndex + 1} of {totalQuestions}
             </span>
@@ -85,6 +87,11 @@ export function QuizView() {
             <span className="text-xs text-muted-foreground truncate max-w-[220px]">
               {activeQuiz.title}
             </span>
+            {user && (
+              <span className="text-[11px] text-muted-foreground/80 flex items-center gap-1 font-mono">
+                • <Cloud className="w-3 h-3 text-primary inline" /> Auto-saved
+              </span>
+            )}
           </div>
         </div>
 

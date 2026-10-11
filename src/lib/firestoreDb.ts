@@ -1,4 +1,4 @@
-import type { UserProfile, UserSession, Quiz, QuizAttempt, HeuristicStatus } from './types';
+import type { UserProfile, UserSession, Quiz, QuizAttempt, HeuristicStatus, ActiveExamSession } from './types';
 
 export function sanitizeUsername(username: string): string {
   return username.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '_');
@@ -114,6 +114,7 @@ export async function registerUserFirestore(
       sessions: [data.session],
       quizzes: [],
       history: [],
+      activeExam: null,
     });
 
     return { success: true, profile: data.profile, session: data.session };
@@ -145,6 +146,7 @@ export async function registerUserFirestore(
       sessions: [fallbackSession],
       quizzes: [],
       history: [],
+      activeExam: null,
     });
 
     return { success: true, profile: fallbackProfile, session: fallbackSession };
@@ -163,6 +165,7 @@ export async function loginUserFirestore(
   session?: UserSession;
   quizzes?: Quiz[];
   history?: QuizAttempt[];
+  activeExam?: ActiveExamSession | null;
   error?: string;
 }> {
   const cleanUser = sanitizeUsername(username);
@@ -189,6 +192,7 @@ export async function loginUserFirestore(
       sessions: data.session ? [data.session] : [],
       quizzes: data.quizzes || [],
       history: data.history || [],
+      activeExam: data.activeExam || null,
     });
 
     return {
@@ -197,6 +201,7 @@ export async function loginUserFirestore(
       session: data.session,
       quizzes: data.quizzes || [],
       history: data.history || [],
+      activeExam: data.activeExam || null,
     };
   } catch (err: any) {
     // Offline local cache fallback
@@ -222,6 +227,7 @@ export async function loginUserFirestore(
         session: localSession,
         quizzes: backup.quizzes || [],
         history: backup.history || [],
+        activeExam: backup.activeExam || null,
       };
     }
     return { success: false, error: 'Cannot connect to authentication service.' };
@@ -298,13 +304,61 @@ export async function saveUserHistoryFirestore(username: string, history: QuizAt
 }
 
 /**
- * Fetch complete user profile, quizzes, and history from Cloud Firestore via Edge Worker
+ * Save or clear active in-progress exam in Cloud Firestore
+ */
+export async function saveActiveExamFirestore(
+  username: string,
+  activeExam: ActiveExamSession | null
+): Promise<boolean> {
+  const cleanUser = sanitizeUsername(username);
+
+  const backup = getLocalUserBackup(cleanUser) || {};
+  backup.activeExam = activeExam;
+  setLocalUserBackup(cleanUser, backup);
+
+  try {
+    const res = await fetch(`${CF_WORKER_URL}/api/user/active-exam`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        username: cleanUser,
+        activeExam,
+      }),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Fetch active in-progress exam from Cloud Firestore
+ */
+export async function fetchActiveExamFirestore(username: string): Promise<ActiveExamSession | null> {
+  const cleanUser = sanitizeUsername(username);
+  try {
+    const res = await fetch(`${CF_WORKER_URL}/api/user/active-exam?username=${encodeURIComponent(cleanUser)}`);
+    if (res.ok) {
+      const data = await res.json();
+      if (data.success) {
+        return data.activeExam || null;
+      }
+    }
+  } catch {}
+
+  const backup = getLocalUserBackup(cleanUser);
+  return backup?.activeExam || null;
+}
+
+/**
+ * Fetch complete user profile, quizzes, history, and active exam from Cloud Firestore
  */
 export async function fetchUserDataFirestore(username: string): Promise<{
   success: boolean;
   quizzes?: Quiz[];
   history?: QuizAttempt[];
   sessions?: UserSession[];
+  activeExam?: ActiveExamSession | null;
   profile?: UserProfile;
   error?: string;
 }> {
@@ -319,6 +373,7 @@ export async function fetchUserDataFirestore(username: string): Promise<{
           quizzes: Array.isArray(data.quizzes) ? data.quizzes : [],
           history: Array.isArray(data.history) ? data.history : [],
           sessions: Array.isArray(data.sessions) ? data.sessions : [],
+          activeExam: data.activeExam || null,
           profile: data.profile,
         };
       }
@@ -335,6 +390,7 @@ export async function fetchUserDataFirestore(username: string): Promise<{
       quizzes: backup.quizzes || [],
       history: backup.history || [],
       sessions: backup.sessions || [],
+      activeExam: backup.activeExam || null,
       profile: backup,
     };
   }

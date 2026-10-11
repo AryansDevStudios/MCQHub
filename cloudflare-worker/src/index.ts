@@ -280,6 +280,7 @@ export default {
           session: newSession,
           quizzes: Array.isArray(userData.quizzes) ? userData.quizzes : [],
           history: Array.isArray(userData.history) ? userData.history : [],
+          activeExam: userData.activeExam || null,
         });
       }
 
@@ -329,6 +330,7 @@ export default {
           quizzes: Array.isArray(userData.quizzes) ? userData.quizzes : [],
           history: Array.isArray(userData.history) ? userData.history : [],
           sessions: Array.isArray(userData.sessions) ? userData.sessions : [],
+          activeExam: userData.activeExam || null,
         });
       }
 
@@ -368,6 +370,46 @@ export default {
         );
 
         return jsonResponse({ success: true, count: Array.isArray(history) ? history.length : 0 });
+      }
+
+      // 7b. User Data: Active Exam Sync (Cross-Device Live State)
+      if (url.pathname === '/api/user/active-exam') {
+        if (request.method === 'POST') {
+          const body = (await request.json()) as any;
+          const { username, activeExam } = body;
+          const cleanUser = sanitizeUsername(username);
+          if (!cleanUser) {
+            return jsonResponse({ success: false, error: 'Username required' }, 400);
+          }
+
+          await patchFirestoreDoc(
+            env,
+            `users/${cleanUser}`,
+            { activeExam: activeExam ? activeExam : null },
+            ['activeExam']
+          );
+
+          return jsonResponse({ success: true });
+        }
+
+        if (request.method === 'GET') {
+          const username = url.searchParams.get('username') || '';
+          const cleanUser = sanitizeUsername(username);
+          if (!cleanUser) {
+            return jsonResponse({ success: false, error: 'Username required' }, 400);
+          }
+
+          const userDoc = await getFirestoreDoc(env, `users/${cleanUser}`);
+          if (!userDoc) {
+            return jsonResponse({ success: false, error: 'User not found' }, 404);
+          }
+
+          const userData = parseDocFields(userDoc);
+          return jsonResponse({
+            success: true,
+            activeExam: userData.activeExam || null,
+          });
+        }
       }
 
       // 8. Generate Quiz endpoint
