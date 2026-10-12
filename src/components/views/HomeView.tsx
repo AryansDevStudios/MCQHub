@@ -70,6 +70,7 @@ export function HomeView() {
     discardActiveExam,
     openShareModal,
     isSharing,
+    isHydrated,
   } = useQuiz();
 
   const [topic, setTopic] = useState('');
@@ -161,7 +162,7 @@ export function HomeView() {
     <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8 pb-24 space-y-6">
       
       {/* Unsubmitted Active Test Banner */}
-      {activeExamSession && (
+      {isHydrated && activeExamSession && (
         <div className="rounded-xl border border-border border-l-4 border-l-primary bg-card p-5 space-y-3 shadow-sm animate-in fade-in transition-all">
           <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
             <div className="space-y-1.5 min-w-0">

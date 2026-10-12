@@ -19,7 +19,7 @@ import { cn } from '@/lib/utils';
 import type { ViewState } from '@/lib/types';
 
 export function Header() {
-  const { view, setView, user, setJoinModalOpen, activeExamSession, resumeActiveExam } = useQuiz();
+  const { view, setView, user, setJoinModalOpen, activeExamSession, resumeActiveExam, isHydrated } = useQuiz();
   const [authDialogOpen, setAuthDialogOpen] = useState(false);
   const [authDialogTab, setAuthDialogTab] = useState<'auth' | 'settings' | 'sessions'>('auth');
 
@@ -75,13 +75,13 @@ export function Header() {
                       {item.icon}
                     </span>
                     <span className="hidden md:inline">{item.label}</span>
-                    {item.id === 'home' && activeExamSession && (
+                    {item.id === 'home' && isHydrated && activeExamSession && (
                       <span
                         className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"
                         title="Unsubmitted quiz in progress"
                       />
                     )}
-                    {item.id === 'history' && activeExamSession && (
+                    {item.id === 'history' && isHydrated && activeExamSession && (
                       <span
                         className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"
                         title="Unsubmitted quiz in progress"
@@ -92,7 +92,7 @@ export function Header() {
               })}
 
               {/* Resume Button (Solid teal Zen Garden style, shown when quiz session active and not on quiz page) */}
-              {activeExamSession && view !== 'quiz' && (
+              {isHydrated && activeExamSession && view !== 'quiz' && (
                 <button
                   type="button"
                   onClick={resumeActiveExam}
@@ -122,17 +122,17 @@ export function Header() {
             <button
               onClick={() => openAuthWithTab('auth')}
               className="flex items-center gap-2 border border-border rounded-md px-2 py-1 text-sm text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
-              title={user ? `Logged in as @${user.username}` : 'Sign In / Account'}
+              title={isHydrated && user ? `Logged in as @${user.username}` : 'Sign In / Account'}
             >
               <div className="w-7 h-7 rounded-full bg-secondary border border-border text-xs font-semibold text-foreground flex items-center justify-center shrink-0">
-                {user ? (
+                {isHydrated && user ? (
                   user.displayName.charAt(0).toUpperCase()
                 ) : (
                   <User className="w-3.5 h-3.5 text-muted-foreground" />
                 )}
               </div>
               <span className="hidden sm:inline max-w-[100px] truncate text-foreground font-medium text-xs">
-                {user ? user.displayName : 'Sign In'}
+                {isHydrated && user ? user.displayName : 'Sign In'}
               </span>
             </button>
 

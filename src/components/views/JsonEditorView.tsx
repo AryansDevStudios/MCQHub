@@ -95,7 +95,7 @@ export function JsonEditorView() {
   const [parseError, setParseError] = useState<string | null>(null);
   const [copiedPrompt, setCopiedPrompt] = useState(false);
 
-  // Sync buffer or restore draft if available
+  // Sync buffer or restore draft if available (empty by default)
   useEffect(() => {
     if (editorJsonBuffer) {
       setJsonText(editorJsonBuffer);
@@ -104,8 +104,13 @@ export function JsonEditorView() {
       let savedDraft: string | null = null;
       try {
         savedDraft = localStorage.getItem('mcqhub_editor_draft');
+        // Clear old auto-cached sample quiz if present so editor starts empty
+        if (savedDraft && savedDraft.trim() === JSON.stringify(SAMPLE_QUIZ, null, 2).trim()) {
+          savedDraft = '';
+          localStorage.removeItem('mcqhub_editor_draft');
+        }
       } catch {}
-      setJsonText(savedDraft || JSON.stringify(SAMPLE_QUIZ, null, 2));
+      setJsonText(savedDraft || '');
       setTitleOverride('');
     }
   }, [editorJsonBuffer]);
@@ -115,11 +120,19 @@ export function JsonEditorView() {
     setEditorJsonBuffer(val);
     setParseError(null);
     try {
-      localStorage.setItem('mcqhub_editor_draft', val);
+      if (val.trim()) {
+        localStorage.setItem('mcqhub_editor_draft', val);
+      } else {
+        localStorage.removeItem('mcqhub_editor_draft');
+      }
     } catch {}
   };
 
   const handleFormatJson = () => {
+    if (!jsonText.trim()) {
+      addToast('Editor is empty. Paste JSON or click "Load Sample"', 'info');
+      return;
+    }
     try {
       const parsed = JSON.parse(jsonText);
       const formatted = JSON.stringify(parsed, null, 2);
@@ -156,6 +169,11 @@ export function JsonEditorView() {
   };
 
   const handleRun = () => {
+    if (!jsonText.trim()) {
+      setParseError('Please paste or write quiz JSON first, or click "Load Sample".');
+      addToast('Editor is empty: paste JSON or click "Load Sample"', 'info');
+      return;
+    }
     try {
       const parsed = JSON.parse(jsonText);
       if (!parsed.questions || !Array.isArray(parsed.questions) || parsed.questions.length === 0) {
@@ -201,6 +219,11 @@ export function JsonEditorView() {
   };
 
   const handleShare = () => {
+    if (!jsonText.trim()) {
+      setParseError('Please paste or write quiz JSON first, or click "Load Sample".');
+      addToast('Editor is empty: paste JSON or click "Load Sample"', 'info');
+      return;
+    }
     try {
       const parsed = JSON.parse(jsonText);
       if (!parsed.questions || !Array.isArray(parsed.questions) || parsed.questions.length === 0) {
@@ -302,7 +325,7 @@ export function JsonEditorView() {
               onChange={(e) => handleTextChange(e.target.value)}
               spellCheck={false}
               className="w-full p-5 font-mono text-xs leading-relaxed bg-transparent resize-y outline-none text-foreground min-h-[400px]"
-              placeholder="Paste your quiz JSON here..."
+              placeholder="Paste or write your quiz JSON here, or click 'Load Sample' to view example format..."
             />
 
             {/* Error bar */}

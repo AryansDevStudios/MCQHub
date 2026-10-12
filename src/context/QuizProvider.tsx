@@ -32,6 +32,7 @@ interface QuizContextType {
   setView: (view: ViewState) => void;
   theme: 'light' | 'dark';
   toggleTheme: () => void;
+  isHydrated: boolean;
 
   // User & Firestore Auth
   user: UserProfile | null;
@@ -161,220 +162,32 @@ export const getViewForPath = (path: string): ViewState => {
 };
 
 export function QuizProvider({ children }: { children: React.ReactNode }) {
-  // Sync view state directly from URL pathname on initial load
-  const [view, setViewState] = useState<ViewState>(() => {
-    if (typeof window !== 'undefined') {
-      const pathView = getViewForPath(window.location.pathname);
-      const cachedExam = localStorage.getItem(STORAGE_KEYS.ACTIVE_EXAM);
-      if (pathView === 'quiz' && cachedExam) return 'quiz';
-      return pathView;
-    }
-    return 'home';
-  });
-
-  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
-    if (typeof window !== 'undefined') {
-      const savedTheme = localStorage.getItem(STORAGE_KEYS.THEME) as 'light' | 'dark' | null;
-      if (savedTheme) return savedTheme;
-    }
-    return 'dark';
-  });
-
-  // Track attempt currently being viewed in ResultsView
-  const [viewingAttempt, setViewingAttempt] = useState<QuizAttempt | null>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const rawHistory = localStorage.getItem(STORAGE_KEYS.LOCAL_HISTORY);
-        if (rawHistory) {
-          const parsed = JSON.parse(rawHistory);
-          if (Array.isArray(parsed) && parsed.length > 0) return parsed[0];
-        }
-      } catch {}
-    }
-    return null;
-  });
-
-  // Auth & Firestore state with instant local hydration
-  const [user, setUser] = useState<UserProfile | null>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const raw = localStorage.getItem(STORAGE_KEYS.USER);
-        if (raw) return JSON.parse(raw);
-      } catch {}
-    }
-    return null;
-  });
-
-  const [activeSession, setActiveSession] = useState<UserSession | null>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const raw = localStorage.getItem(STORAGE_KEYS.SESSION);
-        if (raw) return JSON.parse(raw);
-      } catch {}
-    }
-    return null;
-  });
-
+  // Static-safe initial state (guarantees 100% deterministic SSR/SSG with ZERO hydration errors)
+  const [view, setViewState] = useState<ViewState>('home');
+  const [theme, setTheme] = useState<'light' | 'dark'>('light');
+  const [viewingAttempt, setViewingAttempt] = useState<QuizAttempt | null>(null);
+  const [user, setUser] = useState<UserProfile | null>(null);
+  const [activeSession, setActiveSession] = useState<UserSession | null>(null);
   const [isAuthLoading, setIsAuthLoading] = useState<boolean>(false);
   const [heuristicStatus, setHeuristicStatus] = useState<HeuristicStatus | null>(null);
   const [isCheckingHeuristic, setIsCheckingHeuristic] = useState<boolean>(false);
-
-  // Synchronization status
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
   const [lastSyncTime, setLastSyncTime] = useState<string | null>(null);
-
-  // Collections (0ms instantaneous local hydration)
-  const [savedQuizzes, setSavedQuizzes] = useState<Quiz[]>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const raw = localStorage.getItem(STORAGE_KEYS.LOCAL_QUIZZES);
-        if (raw) return JSON.parse(raw);
-      } catch {}
-    }
-    return [];
-  });
-
-  const [history, setHistory] = useState<QuizAttempt[]>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const raw = localStorage.getItem(STORAGE_KEYS.LOCAL_HISTORY);
-        if (raw) return JSON.parse(raw);
-      } catch {}
-    }
-    return [];
-  });
-
-  // Active Exam state (instant local hydration so refresh retains 100% test progress)
-  const [activeExamSession, setActiveExamSession] = useState<ActiveExamSession | null>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const raw = localStorage.getItem(STORAGE_KEYS.ACTIVE_EXAM);
-        if (raw) return JSON.parse(raw);
-      } catch {}
-    }
-    return null;
-  });
-
-  const [activeQuiz, setActiveQuiz] = useState<Quiz | null>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const raw = localStorage.getItem(STORAGE_KEYS.ACTIVE_EXAM);
-        if (raw) {
-          const parsed = JSON.parse(raw);
-          return parsed.quiz || null;
-        }
-      } catch {}
-    }
-    return null;
-  });
-
-  const [userAnswers, setUserAnswers] = useState<Record<number, number>>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const raw = localStorage.getItem(STORAGE_KEYS.ACTIVE_EXAM);
-        if (raw) {
-          const parsed = JSON.parse(raw);
-          return parsed.userAnswers || {};
-        }
-      } catch {}
-    }
-    return {};
-  });
-
-  const [questionNotes, setQuestionNotes] = useState<Record<number, string>>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const raw = localStorage.getItem(STORAGE_KEYS.ACTIVE_EXAM);
-        if (raw) {
-          const parsed = JSON.parse(raw);
-          return parsed.questionNotes || {};
-        }
-      } catch {}
-    }
-    return {};
-  });
-
-  const [currentQuestionIndex, setCurrentQuestionIndex] = useState<number>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const raw = localStorage.getItem(STORAGE_KEYS.ACTIVE_EXAM);
-        if (raw) {
-          const parsed = JSON.parse(raw);
-          return parsed.currentQuestionIndex || 0;
-        }
-      } catch {}
-    }
-    return 0;
-  });
-
-  const [isInstantMode, setIsInstantModeState] = useState<boolean>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const raw = localStorage.getItem(STORAGE_KEYS.ACTIVE_EXAM);
-        if (raw) {
-          const parsed = JSON.parse(raw);
-          return !!parsed.isInstantMode;
-        }
-      } catch {}
-    }
-    return false;
-  });
-
-  const [checkedQuestions, setCheckedQuestions] = useState<Record<number, boolean>>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const raw = localStorage.getItem(STORAGE_KEYS.ACTIVE_EXAM);
-        if (raw) {
-          const parsed = JSON.parse(raw);
-          return parsed.checkedQuestions || {};
-        }
-      } catch {}
-    }
-    return {};
-  });
-
-  const [elapsedMs, setElapsedMs] = useState<number>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const raw = localStorage.getItem(STORAGE_KEYS.ACTIVE_EXAM);
-        if (raw) {
-          const parsed = JSON.parse(raw);
-          return parsed.elapsedMs || (parsed.elapsedSeconds ? parsed.elapsedSeconds * 1000 : 0);
-        }
-      } catch {}
-    }
-    return 0;
-  });
-
-  const [elapsedSeconds, setElapsedSeconds] = useState<number>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const raw = localStorage.getItem(STORAGE_KEYS.ACTIVE_EXAM);
-        if (raw) {
-          const parsed = JSON.parse(raw);
-          const ms = parsed.elapsedMs || (parsed.elapsedSeconds ? parsed.elapsedSeconds * 1000 : 0);
-          return Math.floor(ms / 1000);
-        }
-      } catch {}
-    }
-    return 0;
-  });
-
+  const [savedQuizzes, setSavedQuizzes] = useState<Quiz[]>([]);
+  const [history, setHistory] = useState<QuizAttempt[]>([]);
+  const [activeExamSession, setActiveExamSession] = useState<ActiveExamSession | null>(null);
+  const [activeQuiz, setActiveQuiz] = useState<Quiz | null>(null);
+  const [userAnswers, setUserAnswers] = useState<Record<number, number>>({});
+  const [questionNotes, setQuestionNotes] = useState<Record<number, string>>({});
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState<number>(0);
+  const [isInstantMode, setIsInstantModeState] = useState<boolean>(false);
+  const [checkedQuestions, setCheckedQuestions] = useState<Record<number, boolean>>({});
+  const [elapsedMs, setElapsedMs] = useState<number>(0);
+  const [elapsedSeconds, setElapsedSeconds] = useState<number>(0);
   const [clockSkewMs, setClockSkewMs] = useState<number>(0);
   const [originDeviceId, setOriginDeviceId] = useState<string | null>(null);
-
-  const [isTimerRunning, setIsTimerRunning] = useState<boolean>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const raw = localStorage.getItem(STORAGE_KEYS.ACTIVE_EXAM);
-        if (raw) {
-          const parsed = JSON.parse(raw);
-          return !!parsed.isTimerRunning;
-        }
-      } catch {}
-    }
-    return false;
-  });
+  const [isHydrated, setIsHydrated] = useState<boolean>(false);
+  const [isTimerRunning, setIsTimerRunning] = useState<boolean>(false);
 
   const activeExamSessionRef = useRef<ActiveExamSession | null>(null);
   activeExamSessionRef.current = activeExamSession;
@@ -690,6 +503,14 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
 
   // 1. Initialize Theme, Local Storage, and Initial Alignment on Mount
   useEffect(() => {
+    setIsHydrated(true);
+
+    // Initial Route Alignment
+    if (typeof window !== 'undefined') {
+      const pathView = getViewForPath(window.location.pathname);
+      setViewState(pathView);
+    }
+
     // Theme
     const savedTheme = localStorage.getItem(STORAGE_KEYS.THEME) as 'light' | 'dark' | null;
     if (savedTheme) {
@@ -707,7 +528,13 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
       if (cachedQuizzes) setSavedQuizzes(JSON.parse(cachedQuizzes));
 
       const cachedHistory = localStorage.getItem(STORAGE_KEYS.LOCAL_HISTORY);
-      if (cachedHistory) setHistory(JSON.parse(cachedHistory));
+      if (cachedHistory) {
+        const parsedHistory = JSON.parse(cachedHistory);
+        setHistory(parsedHistory);
+        if (Array.isArray(parsedHistory) && parsedHistory.length > 0) {
+          setViewingAttempt(parsedHistory[0]);
+        }
+      }
 
       const rawUser = localStorage.getItem(STORAGE_KEYS.USER);
       if (rawUser) {
@@ -1706,6 +1533,7 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
         setView,
         theme,
         toggleTheme,
+        isHydrated,
         user,
         activeSession,
         isAuthLoading,
