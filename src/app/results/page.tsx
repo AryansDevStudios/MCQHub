@@ -2,7 +2,7 @@
 
 import React, { useEffect } from 'react';
 import { useQuiz } from '@/context/QuizProvider';
-import { ResultsView } from '@/components/views/ResultsView';
+import { ViewSwitcher } from '@/components/layout/ViewSwitcher';
 
 export default function ResultsPage() {
   const { setView } = useQuiz();
@@ -11,5 +11,5 @@ export default function ResultsPage() {
     setView('results');
   }, [setView]);
 
-  return <ResultsView />;
+  return <ViewSwitcher />;
 }

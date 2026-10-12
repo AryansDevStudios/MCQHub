@@ -2,7 +2,7 @@
 
 import React, { useEffect } from 'react';
 import { useQuiz } from '@/context/QuizProvider';
-import { HistoryView } from '@/components/views/HistoryView';
+import { ViewSwitcher } from '@/components/layout/ViewSwitcher';
 
 export default function HistoryPage() {
   const { setView } = useQuiz();
@@ -11,5 +11,5 @@ export default function HistoryPage() {
     setView('history');
   }, [setView]);
 
-  return <HistoryView />;
+  return <ViewSwitcher />;
 }

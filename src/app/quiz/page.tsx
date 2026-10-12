@@ -2,14 +2,16 @@
 
 import React, { useEffect } from 'react';
 import { useQuiz } from '@/context/QuizProvider';
-import { QuizView } from '@/components/views/QuizView';
+import { ViewSwitcher } from '@/components/layout/ViewSwitcher';
 
 export default function QuizPage() {
-  const { setView } = useQuiz();
+  const { setView, activeQuiz, activeExamSession } = useQuiz();
 
   useEffect(() => {
-    setView('quiz');
-  }, [setView]);
+    if (activeQuiz || activeExamSession) {
+      setView('quiz');
+    }
+  }, [setView, activeQuiz, activeExamSession]);
 
-  return <QuizView />;
+  return <ViewSwitcher />;
 }

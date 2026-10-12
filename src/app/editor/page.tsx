@@ -2,7 +2,7 @@
 
 import React, { useEffect } from 'react';
 import { useQuiz } from '@/context/QuizProvider';
-import { JsonEditorView } from '@/components/views/JsonEditorView';
+import { ViewSwitcher } from '@/components/layout/ViewSwitcher';
 
 export default function EditorPage() {
   const { setView } = useQuiz();
@@ -11,5 +11,5 @@ export default function EditorPage() {
     setView('editor');
   }, [setView]);
 
-  return <JsonEditorView />;
+  return <ViewSwitcher />;
 }

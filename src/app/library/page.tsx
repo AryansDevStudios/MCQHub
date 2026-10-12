@@ -2,7 +2,7 @@
 
 import React, { useEffect } from 'react';
 import { useQuiz } from '@/context/QuizProvider';
-import { LibraryView } from '@/components/views/LibraryView';
+import { ViewSwitcher } from '@/components/layout/ViewSwitcher';
 
 export default function LibraryPage() {
   const { setView } = useQuiz();
@@ -11,5 +11,5 @@ export default function LibraryPage() {
     setView('library');
   }, [setView]);
 
-  return <LibraryView />;
+  return <ViewSwitcher />;
 }

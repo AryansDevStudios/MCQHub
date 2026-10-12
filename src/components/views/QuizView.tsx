@@ -9,8 +9,13 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
   Clock,
-  Shuffle,
   FileEdit,
   CheckCircle2,
   XCircle,
@@ -21,6 +26,8 @@ import {
   Check,
   Cloud,
   Keyboard,
+  Loader2,
+  AlertCircle,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -39,7 +46,6 @@ export function QuizView() {
     originDeviceId,
     selectAnswer,
     checkAnswer,
-    shuffleOptions,
     saveQuestionNote,
     goToQuestion,
     nextQuestion,
@@ -47,9 +53,11 @@ export function QuizView() {
     finishQuiz,
     setView,
     user,
+    isLoadingSharedQuiz,
   } = useQuiz();
 
   const [showNoteInput, setShowNoteInput] = useState(false);
+  const [showShortcutsDialog, setShowShortcutsDialog] = useState(false);
 
   // Full Keyboard-Driven Assessment Navigation & Option Selection
   useEffect(() => {
@@ -175,9 +183,32 @@ export function QuizView() {
   ]);
 
   if (!activeQuiz || !activeQuiz.questions || activeQuiz.questions.length === 0) {
+    const isSharedUrlPresent = typeof window !== 'undefined' && !!(
+      new URLSearchParams(window.location.search).get('share') ||
+      new URLSearchParams(window.location.search).get('test') ||
+      new URLSearchParams(window.location.search).get('code') ||
+      new URLSearchParams(window.location.search).get('quiz')
+    );
+
+    if (isLoadingSharedQuiz || isSharedUrlPresent) {
+      return (
+        <div className="max-w-md mx-auto py-20 px-4 text-center space-y-4">
+          <Loader2 className="w-8 h-8 text-primary animate-spin mx-auto" />
+          <h2 className="text-base font-semibold">Loading Assessment...</h2>
+          <p className="text-xs text-muted-foreground">
+            Fetching assessment questions from MCQHub cloud. Please wait a moment.
+          </p>
+        </div>
+      );
+    }
+
     return (
       <div className="max-w-md mx-auto py-16 px-4 text-center space-y-4">
+        <AlertCircle className="w-10 h-10 text-muted-foreground/60 mx-auto" />
         <h2 className="text-base font-semibold">No active quiz loaded.</h2>
+        <p className="text-xs text-muted-foreground max-w-sm mx-auto">
+          Please select a quiz from your Library, generate a new one with AI, or import JSON to get started.
+        </p>
         <Button onClick={() => setView('home')} size="sm">
           Return to Home
         </Button>
@@ -268,10 +299,6 @@ export function QuizView() {
             <Badge variant="outline" className="font-mono text-[10px] py-0 px-1.5">
               Q{currentQuestionIndex + 1}
             </Badge>
-            <span className="hidden sm:inline-flex items-center gap-1.5 text-[11px] text-muted-foreground/80 font-mono">
-              <Keyboard className="w-3 h-3 text-primary" />
-              <span>Keys 1–{Math.min(9, currentQuestion.options.length)} • Enter/Space • Arrows</span>
-            </span>
           </div>
 
           <div className="flex items-center gap-1.5">
@@ -288,19 +315,6 @@ export function QuizView() {
             >
               <FileEdit className="w-3.5 h-3.5" />
               <span>{currentNote ? 'Note Added' : 'Add Note'}</span>
-            </Button>
-
-            {/* Shuffle Button */}
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => shuffleOptions(currentQuestionIndex)}
-              disabled={isInstantMode && isChecked}
-              className="h-7 px-2 text-xs text-muted-foreground gap-1"
-              title="Shuffle option order"
-            >
-              <Shuffle className="w-3.5 h-3.5" />
-              <span>Shuffle</span>
             </Button>
           </div>
         </div>
@@ -345,7 +359,6 @@ export function QuizView() {
                   'group w-full text-left p-3 rounded-md border text-xs sm:text-sm flex items-start gap-3 transition-colors',
                   optionStyle
                 )}
-                title={optIdx < 9 ? `Option ${optionLetters[optIdx] || optIdx + 1} (Press ${optIdx + 1} on keyboard)` : undefined}
               >
                 <div
                   className={cn(
@@ -359,21 +372,6 @@ export function QuizView() {
                 <div className="flex-1 pt-0.5 leading-snug">
                   <MarkdownRenderer content={option} inline />
                 </div>
-
-                {/* Keyboard shortcut hint for keys 1-9 */}
-                {optIdx < 9 && !(isInstantMode && isChecked) && (
-                  <span
-                    className={cn(
-                      'hidden sm:inline-flex items-center justify-center font-mono text-[10px] px-1.5 py-0.5 rounded border shrink-0 select-none transition-colors opacity-60 group-hover:opacity-100',
-                      isSelected
-                        ? 'border-primary/40 bg-primary/20 text-primary font-bold'
-                        : 'border-border/60 bg-muted/40 text-muted-foreground'
-                    )}
-                    title={`Press key ${optIdx + 1} to select`}
-                  >
-                    [{optIdx + 1}]
-                  </span>
-                )}
 
                 {isInstantMode && isChecked && (
                   <div className="shrink-0 pt-0.5">
@@ -421,11 +419,10 @@ export function QuizView() {
             disabled={currentQuestionIndex === 0}
             onClick={prevQuestion}
             className="h-8 text-xs gap-1 border-border/70"
-            title="Previous Question (or press ← Left Arrow)"
+            title="Previous Question"
           >
             <ChevronLeft className="w-3.5 h-3.5" />
             <span>Previous</span>
-            <kbd className="hidden sm:inline-block font-mono text-[10px] opacity-60 ml-0.5">←</kbd>
           </Button>
 
           <div className="flex items-center gap-2">
@@ -436,13 +433,10 @@ export function QuizView() {
                 size="sm"
                 onClick={() => checkAnswer(currentQuestionIndex)}
                 className="h-8 text-xs font-medium gap-1.5"
-                title="Check Answer (or press Enter / Space)"
+                title="Check Answer"
               >
                 <Check className="w-3.5 h-3.5" />
                 <span>Check Answer</span>
-                <kbd className="hidden sm:inline-block font-mono text-[10px] bg-background/80 px-1 py-0.2 rounded border border-border/60 text-muted-foreground">
-                  Enter / Space
-                </kbd>
               </Button>
             )}
 
@@ -452,49 +446,23 @@ export function QuizView() {
                 size="sm"
                 onClick={nextQuestion}
                 className="h-8 text-xs font-medium gap-1.5 bg-primary text-primary-foreground"
-                title="Next Question (or press Enter / Space / → Right Arrow)"
+                title="Next Question"
               >
                 <span>Next</span>
                 <ChevronRight className="w-3.5 h-3.5" />
-                <kbd className="hidden sm:inline-block font-mono text-[10px] bg-primary-foreground/20 text-primary-foreground px-1 py-0.2 rounded">
-                  Enter / Space
-                </kbd>
               </Button>
             ) : (
               <Button
                 size="sm"
                 onClick={finishQuiz}
                 className="h-8 text-xs font-semibold gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white px-4"
-                title="Finish Exam (or press Enter / Space)"
+                title="Finish Exam"
               >
                 <span>Finish Quiz</span>
                 <Send className="w-3.5 h-3.5" />
-                <kbd className="hidden sm:inline-block font-mono text-[10px] bg-white/20 text-white px-1 py-0.2 rounded">
-                  Enter / Space
-                </kbd>
               </Button>
             )}
           </div>
-        </div>
-      </div>
-
-      {/* Keyboard Controls Helper Banner */}
-      <div className="rounded-lg border border-border/50 bg-muted/20 px-3.5 py-2 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-[11px] text-muted-foreground select-none">
-        <div className="flex items-center gap-2">
-          <Keyboard className="w-3.5 h-3.5 text-primary shrink-0" />
-          <span className="font-semibold text-foreground/90">Keyboard Controls:</span>
-          <span>
-            Press <kbd className="px-1.5 py-0.5 rounded border border-border/70 bg-background font-mono text-[10px] text-foreground">1</kbd>–<kbd className="px-1.5 py-0.5 rounded border border-border/70 bg-background font-mono text-[10px] text-foreground">{Math.min(9, currentQuestion.options.length)}</kbd> to select option
-          </span>
-        </div>
-        <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-muted-foreground/90">
-          <span>
-            <kbd className="px-1.5 py-0.5 rounded border border-border/70 bg-background font-mono text-[10px] text-foreground">Enter</kbd> / <kbd className="px-1.5 py-0.5 rounded border border-border/70 bg-background font-mono text-[10px] text-foreground">Space</kbd> {isInstantMode && !isChecked ? 'Check Answer' : 'Next / Finish'}
-          </span>
-          <span>•</span>
-          <span>
-            <kbd className="px-1.5 py-0.5 rounded border border-border/70 bg-background font-mono text-[10px] text-foreground">←</kbd> <kbd className="px-1.5 py-0.5 rounded border border-border/70 bg-background font-mono text-[10px] text-foreground">→</kbd> Navigate questions
-          </span>
         </div>
       </div>
 
@@ -522,6 +490,49 @@ export function QuizView() {
           );
         })}
       </div>
+
+      {/* Discreet Bottom Controls / Keyboard Shortcuts Button */}
+      <div className="flex items-center justify-center pt-2">
+        <button
+          type="button"
+          onClick={() => setShowShortcutsDialog(true)}
+          className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground/70 hover:text-foreground hover:bg-muted/40 px-2.5 py-1 rounded transition-colors"
+          title="View Keyboard Shortcuts"
+        >
+          <Keyboard className="w-3.5 h-3.5" />
+          <span>Keyboard Shortcuts</span>
+        </button>
+      </div>
+
+      {/* Keyboard Shortcuts Dialog */}
+      <Dialog open={showShortcutsDialog} onOpenChange={setShowShortcutsDialog}>
+        <DialogContent className="w-[calc(100vw-2rem)] max-w-xs bg-card border-border text-foreground p-5 rounded-xl shadow-2xl">
+          <DialogHeader className="pb-2 border-b border-border/80">
+            <DialogTitle className="text-sm font-bold flex items-center gap-2">
+              <Keyboard className="w-4 h-4 text-primary" />
+              <span>Keyboard Controls</span>
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2.5 py-2 text-xs">
+            <div className="flex items-center justify-between">
+              <span className="text-muted-foreground">Select Option:</span>
+              <span className="font-mono bg-muted/80 px-2 py-0.5 rounded border border-border/60 text-foreground font-semibold">1 – 9</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-muted-foreground">Next / Finish:</span>
+              <span className="font-mono bg-muted/80 px-2 py-0.5 rounded border border-border/60 text-foreground font-semibold">Enter / Space</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-muted-foreground">Previous:</span>
+              <span className="font-mono bg-muted/80 px-2 py-0.5 rounded border border-border/60 text-foreground font-semibold">← Left Arrow</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-muted-foreground">Next:</span>
+              <span className="font-mono bg-muted/80 px-2 py-0.5 rounded border border-border/60 text-foreground font-semibold">→ Right Arrow</span>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
     </div>
   );

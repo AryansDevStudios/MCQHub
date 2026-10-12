@@ -717,24 +717,40 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
       syncLibraryWithCloud(true, cachedUser.username);
     }
 
-    // 4. Check for Shared Assessment in URL (?share=... or ?test=...)
+    // 4. Check for Shared Assessment in URL (?share=... or ?test=... or ?code=... or ?quiz=...)
     try {
       if (typeof window !== 'undefined') {
         const urlParams = new URLSearchParams(window.location.search);
-        const shareParam = urlParams.get('share') || urlParams.get('test');
+        const shareParam = urlParams.get('share') || urlParams.get('test') || urlParams.get('code') || urlParams.get('quiz');
         if (shareParam) {
           setIsLoadingSharedQuiz(true);
           getSharedQuizAction(shareParam)
             .then((res) => {
               setIsLoadingSharedQuiz(false);
               if (res.success && res.quiz) {
-                setPendingSharedQuiz({
+                const originalCreator = res.createdBy || res.quiz.originalCreator || res.quiz.createdBy || 'Anonymous';
+                const originalCreatedAt = res.createdAt || res.quiz.createdAt || new Date().toISOString();
+                const loadedQuiz: Quiz = {
+                  ...res.quiz,
                   shareId: res.shareId || shareParam,
-                  quiz: res.quiz,
-                  createdBy: res.createdBy,
-                  createdAt: res.createdAt,
-                });
-                addToast(`Shared Assessment loaded: "${res.quiz.title}"`, 'info');
+                  originalCreator,
+                  createdBy: originalCreator,
+                  createdAt: originalCreatedAt,
+                };
+
+                const currentPath = window.location.pathname.replace(/\/$/, '') || '/';
+                if (currentPath === '/quiz') {
+                  startQuiz(loadedQuiz, false);
+                  addToast(`Started assessment #${res.shareId || shareParam}: "${res.quiz.title}"`, 'success');
+                } else {
+                  setPendingSharedQuiz({
+                    shareId: res.shareId || shareParam,
+                    quiz: loadedQuiz,
+                    createdBy: originalCreator,
+                    createdAt: originalCreatedAt,
+                  });
+                  addToast(`Shared Assessment loaded: "${res.quiz.title}"`, 'info');
+                }
               } else {
                 addToast(res.error || 'Shared assessment link has expired', 'error');
               }
