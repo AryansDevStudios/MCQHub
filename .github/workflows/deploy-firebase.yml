@@ -1,0 +1,52 @@
+name: Deploy Static Website to Firebase Hosting
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build_and_deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm ci || npm install
+
+      - name: Build Next.js Static Export
+        run: npm run build
+        env:
+          NEXT_PUBLIC_FIREBASE_API_KEY: ${{ secrets.NEXT_PUBLIC_FIREBASE_API_KEY || 'AIzaSyATzfV9pFDedahaiCwjrbELK9r21jKQ2As' }}
+          NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: ${{ secrets.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || 'mcqhub-724e3.firebaseapp.com' }}
+          NEXT_PUBLIC_FIREBASE_PROJECT_ID: ${{ secrets.NEXT_PUBLIC_FIREBASE_PROJECT_ID || 'mcqhub-724e3' }}
+          NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: ${{ secrets.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || 'mcqhub-724e3.firebasestorage.app' }}
+          NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || '580691793244' }}
+          NEXT_PUBLIC_FIREBASE_APP_ID: ${{ secrets.NEXT_PUBLIC_FIREBASE_APP_ID || '1:580691793244:web:b510d65368a5fe03b11d99' }}
+          NEXT_PUBLIC_CF_WORKER_URL: ${{ secrets.NEXT_PUBLIC_CF_WORKER_URL || 'https://mcqhub.adsbackend01.workers.dev' }}
+
+      - name: Deploy to Firebase Hosting (Official Action)
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        if: "${{ env.FIREBASE_SERVICE_ACCOUNT != '' }}"
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_MCQHUB_724E3 || secrets.FIREBASE_SERVICE_ACCOUNT }}
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_MCQHUB_724E3 || secrets.FIREBASE_SERVICE_ACCOUNT }}
+          channelId: live
+          projectId: mcqhub-724e3
+          target: mcqhub
+
+      - name: Deploy via Firebase Token (Fallback)
+        if: "${{ env.FIREBASE_SERVICE_ACCOUNT == '' && env.FIREBASE_TOKEN != '' }}"
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_MCQHUB_724E3 || secrets.FIREBASE_SERVICE_ACCOUNT }}
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+        run: npx firebase deploy --only hosting --token "$FIREBASE_TOKEN"

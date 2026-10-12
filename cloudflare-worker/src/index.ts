@@ -27,7 +27,7 @@ const CORS_HEADERS = {
 const DEFAULT_FIREBASE_API_KEY = 'AIzaSyATzfV9pFDedahaiCwjrbELK9r21jKQ2As';
 const DEFAULT_FIREBASE_PROJECT_ID = 'mcqhub-724e3';
 const DEFAULT_GEMINI_MODEL = 'gemini-3.5-flash-lite';
-const MCQ_HUB_PUBLIC_BASE = 'https://mcqhub.pages.dev';
+const MCQ_HUB_PUBLIC_BASE = 'https://mcqhub.web.app';
 
 function jsonResponse(data: any, status = 200) {
   return new Response(JSON.stringify(data), {

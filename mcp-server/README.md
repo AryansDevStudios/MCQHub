@@ -13,7 +13,7 @@ https://mcqhub.adsbackend01.workers.dev/{your_secret_mcp_token}/mcp
 ```
 
 ### How to Get Your Personal Link:
-1. Open [MCQHub](https://mcqhub.pages.dev) and sign in (or register).
+1. Open [MCQHub](https://mcqhub.web.app) and sign in (or register).
 2. Click your account in the top bar to open **Account & Settings**.
 3. Select the **AI MCP** tab.
 4. Copy your private endpoint or one-click copy the configuration for **Cursor**, **Claude Desktop**, or **Windsurf**.

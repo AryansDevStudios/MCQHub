@@ -48,7 +48,7 @@ service cloud.firestore {
 ### 3. Cloudflare Workers Edge Gateway & Model Context Protocol (MCP) Server
 A complete Cloudflare Workers implementation is located in [`cloudflare-worker/`](file:///d:/MCQHub/cloudflare-worker), and a local Stdio bridge in [`mcp-server/`](file:///d:/MCQHub/mcp-server):
 - **10-Tool MCP Server:** Implements standard JSON-RPC 2.0 at `https://mcqhub.adsbackend01.workers.dev/api/mcp` and via `node mcp-server/index.mjs` for Claude Desktop, Cursor, Windsurf, and Antigravity.
-- **Autonomous Quiz Generation & Public Sharing:** AI generates assessments via Gemini 3.5 Flash Lite, issues an immutable **5-digit PIN**, saves directly to Firestore, and produces an interactive public URL (`https://mcqhub.pages.dev/?share=30172`).
+- **Autonomous Quiz Generation & Public Sharing:** AI generates assessments via Gemini 3.5 Flash Lite, issues an immutable **5-digit PIN**, saves directly to Firestore, and produces an interactive public URL (`https://mcqhub.web.app/?share=30172`).
 - **User Authentication & Personal Library Dispatch:** Supports logging in, registering, and dispatching quizzes directly into student personal libraries from AI chat.
 - **AI Tutor Diagnostic Review:** Objective test feedback with LaTeX mathematical derivations and study recommendations.
 - **Edge Datacenter Health:** `/api/heuristic` reports real-time Cloudflare datacenter colo (e.g., `BOM`, `LHR`) and Firestore millisecond latency.

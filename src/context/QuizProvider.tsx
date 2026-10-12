@@ -1480,7 +1480,7 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
 
       const res = await createSharedQuizAction(quizToShare, origCreator);
       if (res.success && res.shareId) {
-        const origin = typeof window !== 'undefined' ? window.location.origin : 'https://mcqhub.pages.dev';
+        const origin = typeof window !== 'undefined' ? window.location.origin : 'https://mcqhub.web.app';
         const shareUrl = `${origin}/?share=${res.shareId}`;
         
         const finalQuiz: Quiz = {
