@@ -228,6 +228,14 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
   const userRef = useRef<UserProfile | null>(null);
   userRef.current = user;
 
+  const savedQuizzesRef = useRef<Quiz[]>(savedQuizzes);
+  savedQuizzesRef.current = savedQuizzes;
+
+  const historyRef = useRef<QuizAttempt[]>(history);
+  historyRef.current = history;
+
+  const syncLibraryWithCloudRef = useRef<(silent?: boolean, usernameOverride?: string) => Promise<void>>(async () => {});
+
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const lastLocalUpdateRef = useRef<number>(0);
   const syncExamTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -302,7 +310,7 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
    */
   const syncLibraryWithCloud = useCallback(
     async (silent: boolean = false, usernameOverride?: string) => {
-      const activeUsername = usernameOverride || user?.username;
+      const activeUsername = usernameOverride || userRef.current?.username;
       if (!activeUsername) return;
 
       setIsSyncing(true);
@@ -331,7 +339,7 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
           const rawLocal = localStorage.getItem(STORAGE_KEYS.LOCAL_QUIZZES);
           if (rawLocal) currentLocalQuizzes = JSON.parse(rawLocal);
         } catch {
-          currentLocalQuizzes = savedQuizzes;
+          currentLocalQuizzes = savedQuizzesRef.current;
         }
 
         // 2. Reconcile Quizzes
@@ -362,7 +370,7 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
           const rawHistory = localStorage.getItem(STORAGE_KEYS.LOCAL_HISTORY);
           if (rawHistory) currentLocalHistory = JSON.parse(rawHistory);
         } catch {
-          currentLocalHistory = history;
+          currentLocalHistory = historyRef.current;
         }
 
         const mergedHistoryMap = new Map<string, QuizAttempt>();
@@ -434,8 +442,10 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
         setIsSyncing(false);
       }
     },
-    [user, savedQuizzes, history, addToast]
+    [addToast]
   );
+
+  syncLibraryWithCloudRef.current = syncLibraryWithCloud;
 
   // Navigation with browser URL deep-linking and smart cloud sync
   const setView = useCallback(
@@ -452,10 +462,10 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
         } catch {}
       }
       if ((newView === 'library' || newView === 'history') && userRef.current) {
-        syncLibraryWithCloud(true);
+        syncLibraryWithCloudRef.current(true);
       }
     },
-    [syncLibraryWithCloud]
+    []
   );
 
   // Handle browser Back / Forward navigation (PopState) and beforeunload timer snapshot
@@ -468,7 +478,7 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
           localStorage.setItem('mcqhub_last_view', targetView);
         } catch {}
         if ((targetView === 'library' || targetView === 'history') && userRef.current) {
-          syncLibraryWithCloud(true);
+          syncLibraryWithCloudRef.current(true);
         }
       }
     };
@@ -644,29 +654,28 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // 2. Listen for Network Reconnect: Sync immediately when internet is restored
+  // 2. Listen for Network Reconnect: Sync silently when internet is restored
   useEffect(() => {
     const handleOnline = () => {
-      if (user) {
-        addToast('Internet connection restored. Syncing with cloud...', 'info');
-        syncLibraryWithCloud(false);
+      if (userRef.current) {
+        syncLibraryWithCloudRef.current(true);
       }
     };
     window.addEventListener('online', handleOnline);
     return () => window.removeEventListener('online', handleOnline);
-  }, [user, syncLibraryWithCloud, addToast]);
+  }, []);
 
-  // 3. Cross-Device Live Active Exam Sync (Only on Visibility Change / Tab Focus with 45s Cooldown)
+  // 3. Cross-Device Live Sync (Only on Visibility Change / Tab Focus with 45s Cooldown)
   // Strictly protects Firebase free tier by eliminating high-frequency continuous polling
   useEffect(() => {
-    if (!user) return;
-    let lastPullTime = 0;
+    let lastExamPullTime = 0;
+    let lastLibraryPullTime = 0;
 
     const pullActiveExam = async () => {
       if (!userRef.current || isSyncingExamRef.current) return;
       const now = Date.now();
-      if (now - lastPullTime < 45000) return; // Strict 45s cooldown
-      lastPullTime = now;
+      if (now - lastExamPullTime < 45000) return; // Strict 45s cooldown
+      lastExamPullTime = now;
       try {
         const res = await fetchActiveExamFirestore(userRef.current.username);
         if (res.clientSkewMs !== undefined) {
@@ -708,9 +717,20 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
       } catch {}
     };
 
+    const pullLibraryData = async () => {
+      if (!userRef.current) return;
+      const now = Date.now();
+      if (now - lastLibraryPullTime < 45000) return; // Strict 45s cooldown
+      lastLibraryPullTime = now;
+      try {
+        await syncLibraryWithCloudRef.current(true);
+      } catch {}
+    };
+
     const handleVisibility = () => {
-      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible' && userRef.current) {
         pullActiveExam();
+        pullLibraryData();
       }
     };
 
@@ -721,7 +741,7 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
       document.removeEventListener('visibilitychange', handleVisibility);
       window.removeEventListener('focus', handleVisibility);
     };
-  }, [user, activeQuiz]);
+  }, [activeQuiz]);
 
   const runInitialHeuristic = async () => {
     setIsCheckingHeuristic(true);

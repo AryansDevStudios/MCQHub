@@ -1,15 +1,8 @@
 'use client';
 
-import React, { useEffect } from 'react';
-import { useQuiz } from '@/context/QuizProvider';
+import React from 'react';
 import { ViewSwitcher } from '@/components/layout/ViewSwitcher';
 
 export default function LibraryPage() {
-  const { setView } = useQuiz();
-
-  useEffect(() => {
-    setView('library');
-  }, [setView]);
-
   return <ViewSwitcher initialRoute="library" />;
 }

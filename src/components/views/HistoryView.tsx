@@ -20,7 +20,6 @@ import {
   ChevronRight,
   Trash2,
   Calendar,
-  RefreshCw,
   Play,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -34,8 +33,6 @@ export function HistoryView() {
     viewAttemptResult,
     setView,
     user,
-    isSyncing,
-    syncLibraryWithCloud,
     lastSyncTime,
     activeExamSession,
     resumeActiveExam,
@@ -78,20 +75,6 @@ export function HistoryView() {
 
         {/* Action Buttons */}
         <div className="flex items-center gap-2 self-start sm:self-auto">
-          {user && (
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={isSyncing}
-              onClick={() => syncLibraryWithCloud(false)}
-              className="h-8 text-xs gap-1.5 border-border bg-transparent hover:bg-secondary text-foreground rounded-lg shrink-0"
-              title="Sync history with cloud"
-            >
-              <RefreshCw className={cn('w-3.5 h-3.5 text-primary', isSyncing && 'animate-spin')} />
-              <span>{isSyncing ? 'Syncing...' : 'Sync Cloud'}</span>
-            </Button>
-          )}
-
           {history.length > 0 && (
             <Button
               variant="ghost"

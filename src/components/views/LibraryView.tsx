@@ -21,7 +21,6 @@ import {
   Search,
   Calendar,
   Layers,
-  RefreshCw,
   Share2,
   KeyRound,
   User,
@@ -37,8 +36,6 @@ export function LibraryView() {
     setEditorJsonBuffer,
     setView,
     user,
-    isSyncing,
-    syncLibraryWithCloud,
     lastSyncTime,
     openShareModal,
     setJoinModalOpen,
@@ -94,20 +91,6 @@ export function LibraryView() {
             <KeyRound className="w-3.5 h-3.5 text-primary" />
             <span>Open Shared</span>
           </Button>
-
-          {user && (
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={isSyncing}
-              onClick={() => syncLibraryWithCloud(false)}
-              className="h-9 text-xs gap-1.5 border border-border bg-transparent hover:bg-secondary text-foreground rounded-lg shrink-0"
-              title="Sync quizzes with cloud"
-            >
-              <RefreshCw className={cn('w-3.5 h-3.5 text-primary', isSyncing && 'animate-spin')} />
-              <span>{isSyncing ? 'Syncing...' : 'Sync Cloud'}</span>
-            </Button>
-          )}
 
           {/* Search */}
           <div className="relative w-full sm:w-56">
