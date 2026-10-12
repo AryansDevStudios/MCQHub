@@ -4,8 +4,8 @@ import React, { useState } from 'react';
 import { useQuiz } from '@/context/QuizProvider';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { UserAuthDialog } from '@/components/auth/UserAuthDialog';
+import { Logo } from '@/components/icons';
 import {
-  Leaf,
   Sparkles,
   FileCode2,
   BookmarkCheck,
@@ -47,10 +47,10 @@ export function Header() {
               className="flex items-center gap-2 hover:opacity-85 transition-opacity shrink-0"
               title="MCQHub Home"
             >
-              <div className="w-7 h-7 rounded-lg bg-primary/10 border border-primary/20 text-primary flex items-center justify-center shrink-0">
-                <Leaf className="w-4 h-4 text-primary" />
+              <div className="w-7 h-7 rounded-lg overflow-hidden border border-border flex items-center justify-center shadow-xs shrink-0 bg-card">
+                <Logo className="w-full h-full object-cover" />
               </div>
-              <span className="font-semibold text-sm tracking-tight text-foreground hidden sm:inline">
+              <span className="font-bold text-sm tracking-tight text-foreground hidden sm:inline">
                 MCQHub
               </span>
             </button>
