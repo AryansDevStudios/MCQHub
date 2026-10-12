@@ -4,9 +4,11 @@ import React from 'react';
 import { useQuiz } from '@/context/QuizProvider';
 
 export function StatusBar() {
-  const { user, isSyncing, view, activeQuiz, currentQuestionIndex } = useQuiz();
+  const { user, isSyncing, view, activeQuiz, currentQuestionIndex, isHydrated } = useQuiz();
 
-  const syncStatus = user
+  const syncStatus = !isHydrated
+    ? 'Local Mode'
+    : user
     ? isSyncing
       ? 'Syncing...'
       : 'Cloud Synced'
@@ -18,7 +20,7 @@ export function StatusBar() {
       <div className="flex items-center gap-2 overflow-hidden">
         <span>{syncStatus}</span>
 
-        {view === 'quiz' && activeQuiz && (
+        {isHydrated && view === 'quiz' && activeQuiz && (
           <>
             <span className="text-border">·</span>
             <span>

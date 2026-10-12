@@ -11,5 +11,5 @@ export default function EditorPage() {
     setView('editor');
   }, [setView]);
 
-  return <ViewSwitcher />;
+  return <ViewSwitcher initialRoute="editor" />;
 }

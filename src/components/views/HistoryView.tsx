@@ -40,6 +40,7 @@ export function HistoryView() {
     activeExamSession,
     resumeActiveExam,
     discardActiveExam,
+    isHydrated,
   } = useQuiz();
 
   const [showClearDialog, setShowClearDialog] = useState(false);
@@ -106,7 +107,7 @@ export function HistoryView() {
       </div>
 
       {/* Active Exam Banner */}
-      {activeExamSession && (
+      {isHydrated && activeExamSession && (
         <div className="border border-border bg-card rounded-2xl p-5 border-l-4 border-l-primary space-y-3 transition-all">
           <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
             <div className="space-y-1.5 min-w-0">

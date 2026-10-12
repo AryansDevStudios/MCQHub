@@ -11,5 +11,5 @@ export default function HistoryPage() {
     setView('history');
   }, [setView]);
 
-  return <ViewSwitcher />;
+  return <ViewSwitcher initialRoute="history" />;
 }

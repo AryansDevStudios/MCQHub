@@ -53,6 +53,7 @@ export function QuizView() {
     setView,
     user,
     isLoadingSharedQuiz,
+    isHydrated,
   } = useQuiz();
 
   const [showNoteInput, setShowNoteInput] = useState(false);
@@ -191,14 +192,14 @@ export function QuizView() {
   ]);
 
   if (!activeQuiz || !activeQuiz.questions || activeQuiz.questions.length === 0) {
-    const isSharedUrlPresent = typeof window !== 'undefined' && !!(
+    const isSharedUrlPresent = isHydrated && typeof window !== 'undefined' && !!(
       new URLSearchParams(window.location.search).get('share') ||
       new URLSearchParams(window.location.search).get('test') ||
       new URLSearchParams(window.location.search).get('code') ||
       new URLSearchParams(window.location.search).get('quiz')
     );
 
-    if (isLoadingSharedQuiz || isSharedUrlPresent) {
+    if ((isHydrated && isLoadingSharedQuiz) || isSharedUrlPresent) {
       return (
         <div className="flex flex-col items-center justify-center py-24 text-center">
           <Loader2 className="w-5 h-5 text-primary animate-spin" />

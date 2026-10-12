@@ -11,5 +11,5 @@ export default function QuizPage() {
     setView('quiz');
   }, [setView]);
 
-  return <ViewSwitcher />;
+  return <ViewSwitcher initialRoute="quiz" />;
 }

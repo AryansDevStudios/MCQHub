@@ -11,5 +11,5 @@ export default function Page() {
     setView('home');
   }, [setView]);
 
-  return <ViewSwitcher />;
+  return <ViewSwitcher initialRoute="home" />;
 }

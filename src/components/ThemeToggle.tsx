@@ -5,17 +5,18 @@ import { Moon, Sun } from 'lucide-react';
 import { useQuiz } from '@/context/QuizProvider';
 
 export function ThemeToggle() {
-  const { theme, toggleTheme } = useQuiz();
+  const { theme, toggleTheme, isHydrated } = useQuiz();
 
   return (
     <button
       type="button"
       onClick={toggleTheme}
       className="p-1.5 rounded-md hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
-      title={`Switch to ${theme === 'dark' ? 'Light' : 'Dark'} mode`}
+      title={isHydrated ? `Switch to ${theme === 'dark' ? 'Light' : 'Dark'} mode` : 'Toggle theme'}
       aria-label="Toggle theme"
+      suppressHydrationWarning
     >
-      {theme === 'dark' ? (
+      {isHydrated && theme === 'dark' ? (
         <Sun className="w-4 h-4 text-amber-500/80" />
       ) : (
         <Moon className="w-4 h-4 text-stone-500" />

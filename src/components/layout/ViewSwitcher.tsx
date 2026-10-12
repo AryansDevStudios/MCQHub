@@ -9,10 +9,16 @@ import { ResultsView } from '@/components/views/ResultsView';
 import { LibraryView } from '@/components/views/LibraryView';
 import { HistoryView } from '@/components/views/HistoryView';
 
-export function ViewSwitcher() {
-  const { view } = useQuiz();
+import type { ViewState } from '@/lib/types';
 
-  switch (view) {
+export function ViewSwitcher({ initialRoute = 'home' }: { initialRoute?: ViewState }) {
+  const { view, isHydrated } = useQuiz();
+
+  // Prior to client hydration, render initialRoute matching the static HTML of this route page.
+  // Once hydrated, follow the reactive SPA view state.
+  const activeView = isHydrated ? view : initialRoute;
+
+  switch (activeView) {
     case 'editor':
       return <JsonEditorView />;
     case 'quiz':

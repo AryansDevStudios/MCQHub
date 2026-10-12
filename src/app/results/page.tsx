@@ -11,5 +11,5 @@ export default function ResultsPage() {
     setView('results');
   }, [setView]);
 
-  return <ViewSwitcher />;
+  return <ViewSwitcher initialRoute="results" />;
 }

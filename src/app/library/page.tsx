@@ -11,5 +11,5 @@ export default function LibraryPage() {
     setView('library');
   }, [setView]);
 
-  return <ViewSwitcher />;
+  return <ViewSwitcher initialRoute="library" />;
 }
