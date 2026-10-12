@@ -492,3 +492,68 @@ export async function deleteUserAiTokenFirestore(username: string): Promise<bool
     return false;
   }
 }
+
+/**
+ * Fetch or generate secret MCP access token and endpoint for user
+ */
+export async function getUserMcpTokenFirestore(username: string): Promise<{
+  success: boolean;
+  mcpToken?: string;
+  mcpUrl?: string;
+  error?: string;
+}> {
+  const cleanUser = sanitizeUsername(username);
+  try {
+    const res = await fetch(`${CF_WORKER_URL}/api/user/mcp-token`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: cleanUser, action: 'get' }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.success) {
+        return {
+          success: true,
+          mcpToken: data.mcpToken,
+          mcpUrl: data.mcpUrl,
+        };
+      }
+    }
+    return { success: false, error: 'Could not fetch MCP token' };
+  } catch (err: any) {
+    return { success: false, error: err?.message || 'Network error' };
+  }
+}
+
+/**
+ * Regenerate / rotate secret MCP access token for user
+ */
+export async function rotateUserMcpTokenFirestore(username: string): Promise<{
+  success: boolean;
+  mcpToken?: string;
+  mcpUrl?: string;
+  error?: string;
+}> {
+  const cleanUser = sanitizeUsername(username);
+  try {
+    const res = await fetch(`${CF_WORKER_URL}/api/user/mcp-token`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: cleanUser, action: 'generate' }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.success) {
+        return {
+          success: true,
+          mcpToken: data.mcpToken,
+          mcpUrl: data.mcpUrl,
+        };
+      }
+    }
+    return { success: false, error: 'Could not rotate MCP token' };
+  } catch (err: any) {
+    return { success: false, error: err?.message || 'Network error' };
+  }
+}
+

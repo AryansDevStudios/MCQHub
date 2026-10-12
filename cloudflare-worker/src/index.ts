@@ -6,7 +6,9 @@
  * - User Data Persistence (Quizzes library, History attempt logs, Active exam sync)
  * - Edge AI proxy to Google Gemini 3.5 Flash Lite
  * - High-Precision SNTP Clock Calibration
- * - Model Context Protocol (MCP) JSON-RPC 2.0 Gateway (10 Specialized Tools)
+ * - Model Context Protocol (MCP) Gateway:
+ *   - Public MCP: https://mcqhub.adsbackend01.workers.dev/api/mcp
+ *   - Personal Auth MCP: https://mcqhub.adsbackend01.workers.dev/{secret_mcp_token}/mcp
  */
 
 export interface Env {
@@ -42,6 +44,15 @@ function hashPassword(pass: string): string {
   return btoa(`mcqhub:${pass}`);
 }
 
+function generateSecretMcpToken(): string {
+  const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+  let rand = '';
+  for (let i = 0; i < 24; i++) {
+    rand += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return `mcp_${rand}`;
+}
+
 function getFirestoreApiKey(env: Env): string {
   return env.FIREBASE_API_KEY || DEFAULT_FIREBASE_API_KEY;
 }
@@ -74,6 +85,13 @@ async function getFirestoreDoc(env: Env, path: string): Promise<any | null> {
   }
   const data: any = await res.json();
   return data;
+}
+
+async function deleteFirestoreDoc(env: Env, path: string): Promise<boolean> {
+  const apiKey = getFirestoreApiKey(env);
+  const url = `${getFirestoreBaseUrl(env)}/${path}?key=${apiKey}`;
+  const res = await fetch(url, { method: 'DELETE' });
+  return res.ok;
 }
 
 async function patchFirestoreDoc(env: Env, path: string, fields: Record<string, any>, maskFields?: string[]): Promise<any> {
@@ -132,6 +150,17 @@ function parseDocFields(doc: any): Record<string, any> {
     }
   }
   return res;
+}
+
+async function resolveMcpUser(env: Env, token: string): Promise<string | null> {
+  if (!token) return null;
+  const cleanToken = token.trim();
+  const tokenDoc = await getFirestoreDoc(env, `mcp_tokens/${cleanToken}`);
+  if (tokenDoc) {
+    const data = parseDocFields(tokenDoc);
+    return data.username || null;
+  }
+  return null;
 }
 
 async function generateUnique5DigitCode(env: Env): Promise<string> {
@@ -265,11 +294,13 @@ Respond directly in clean Markdown.`;
 
 // ---------------------------------------------------------
 // MCP (Model Context Protocol) Tools Definitions
+// Note: register_user is removed from AI tool schema so registration
+// is exclusively done via the website UI.
 // ---------------------------------------------------------
 const MCP_TOOLS_DEFINITIONS = [
   {
     name: 'generate_and_share_quiz',
-    description: 'Generate an academic multiple-choice quiz using Gemini 3.5 Flash Lite, automatically publish it to MCQHub with a 5-digit numeric share code, and generate a public interactive test link. Can optionally dispatch directly to a signed-in user library in Firestore.',
+    description: 'Generate an academic multiple-choice quiz using Gemini 3.5 Flash Lite, automatically publish it to MCQHub with a 5-digit numeric share code, and generate a public interactive test link. Automatically saves to user library when authenticated.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -279,8 +310,8 @@ const MCP_TOOLS_DEFINITIONS = [
         quizStyle: { type: 'string', enum: ['General', 'Conceptual', 'Problem Solving', 'Board Exam Prep'], description: 'Quiz style focus (default: General)' },
         context: { type: 'string', description: 'Optional context, notes, or chapter excerpts to ground the questions' },
         withExplanations: { type: 'boolean', description: 'Whether to include detailed step-by-step explanations (default: true)' },
-        authorUsername: { type: 'string', description: 'Optional username of the creator or signed-in user' },
-        saveToUserLibrary: { type: 'boolean', description: 'Whether to dispatch and save the generated quiz directly to the user library in Firestore (default: false)' },
+        authorUsername: { type: 'string', description: 'Optional username override (defaults to authenticated account)' },
+        saveToUserLibrary: { type: 'boolean', description: 'Whether to save to the user library in Firestore (default: true for authenticated users)' },
         visibility: { type: 'string', enum: ['public', 'private'], description: 'Assessment visibility (default: public)' },
       },
       required: ['topic'],
@@ -308,8 +339,8 @@ const MCP_TOOLS_DEFINITIONS = [
             required: ['question', 'options', 'correctAnswer'],
           },
         },
-        authorUsername: { type: 'string', description: 'Optional creator username' },
-        saveToUserLibrary: { type: 'boolean', description: 'Whether to save to the author personal library (default: false)' },
+        authorUsername: { type: 'string', description: 'Optional creator username override' },
+        saveToUserLibrary: { type: 'boolean', description: 'Whether to save to the author personal library' },
       },
       required: ['title', 'questions'],
     },
@@ -327,7 +358,7 @@ const MCP_TOOLS_DEFINITIONS = [
   },
   {
     name: 'login_user',
-    description: 'Authenticate an MCQHub user account to verify credentials and retrieve profile details.',
+    description: 'Authenticate an MCQHub user account to verify credentials and retrieve profile details (optional fallback; secret URL token provides zero-password auth).',
     inputSchema: {
       type: 'object',
       properties: {
@@ -338,27 +369,13 @@ const MCP_TOOLS_DEFINITIONS = [
     },
   },
   {
-    name: 'register_user',
-    description: 'Register a new user account on MCQHub edge Firestore backend.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        username: { type: 'string', description: 'Desired username (minimum 3 alphanumeric characters)' },
-        password: { type: 'string', description: 'Desired password (minimum 4 characters)' },
-        displayName: { type: 'string', description: 'Optional display name' },
-      },
-      required: ['username', 'password'],
-    },
-  },
-  {
     name: 'get_user_library',
     description: 'Retrieve all quizzes and assessments saved in a user personal library.',
     inputSchema: {
       type: 'object',
       properties: {
-        username: { type: 'string', description: 'Account username' },
+        username: { type: 'string', description: 'Optional username (automatically defaults to authenticated account)' },
       },
-      required: ['username'],
     },
   },
   {
@@ -367,11 +384,10 @@ const MCP_TOOLS_DEFINITIONS = [
     inputSchema: {
       type: 'object',
       properties: {
-        username: { type: 'string', description: 'Target user username' },
+        username: { type: 'string', description: 'Target user username (defaults to authenticated account)' },
         shareCode: { type: 'string', description: '5-digit numeric share code to import' },
         quiz: { type: 'object', description: 'Optional full quiz payload to save directly' },
       },
-      required: ['username'],
     },
   },
   {
@@ -380,9 +396,8 @@ const MCP_TOOLS_DEFINITIONS = [
     inputSchema: {
       type: 'object',
       properties: {
-        username: { type: 'string', description: 'Account username' },
+        username: { type: 'string', description: 'Optional username (automatically defaults to authenticated account)' },
       },
-      required: ['username'],
     },
   },
   {
@@ -410,7 +425,14 @@ const MCP_TOOLS_DEFINITIONS = [
   },
 ];
 
-async function executeMcpTool(env: Env, name: string, args: any, cfData: any, authHeader?: string): Promise<any> {
+async function executeMcpTool(
+  env: Env,
+  name: string,
+  args: any,
+  cfData: any,
+  authHeader?: string,
+  authenticatedUser?: string | null
+): Promise<any> {
   const apiKeyOverride = authHeader ? authHeader.replace('Bearer ', '').trim() : undefined;
 
   switch (name) {
@@ -422,8 +444,8 @@ async function executeMcpTool(env: Env, name: string, args: any, cfData: any, au
       const quizStyle = args?.quizStyle || 'General';
       const context = args?.context || '';
       const withExplanations = args?.withExplanations !== false;
-      const authorUsername = args?.authorUsername?.trim();
-      const saveToUserLibrary = !!args?.saveToUserLibrary;
+      const authorUsername = args?.authorUsername?.trim() || authenticatedUser || 'MCQHub AI Tutor';
+      const saveToUserLibrary = args?.saveToUserLibrary !== undefined ? !!args.saveToUserLibrary : (!!authenticatedUser);
       const visibility = args?.visibility || 'public';
 
       const parsedQuiz = await callGeminiGenerateQuiz(
@@ -434,11 +456,11 @@ async function executeMcpTool(env: Env, name: string, args: any, cfData: any, au
         quizStyle,
         context,
         withExplanations,
-        apiKeyOverride
+        args?.apiKey || apiKeyOverride
       );
 
       const shareCode = await generateUnique5DigitCode(env);
-      const creator = authorUsername || 'MCQHub AI Tutor';
+      const creator = authorUsername;
       const createdAt = new Date().toISOString();
       const quizId = `ai_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
 
@@ -493,13 +515,16 @@ async function executeMcpTool(env: Env, name: string, args: any, cfData: any, au
     }
 
     case 'create_custom_quiz': {
-      const { title, questions, description, authorUsername, saveToUserLibrary } = args;
+      const { title, questions, description } = args;
+      const authorUsername = args?.authorUsername?.trim() || authenticatedUser || 'Custom Creator';
+      const saveToUserLibrary = args?.saveToUserLibrary !== undefined ? !!args.saveToUserLibrary : (!!authenticatedUser);
+
       if (!title || !Array.isArray(questions) || questions.length === 0) {
         throw new Error('Valid title and at least 1 question are required');
       }
 
       const shareCode = await generateUnique5DigitCode(env);
-      const creator = authorUsername?.trim() || 'Custom Creator';
+      const creator = authorUsername;
       const createdAt = new Date().toISOString();
       const quizId = `cust_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
 
@@ -609,6 +634,7 @@ async function executeMcpTool(env: Env, name: string, args: any, cfData: any, au
           displayName: userData.displayName,
           createdAt: userData.createdAt,
           lastLogin: now,
+          mcpToken: userData.mcpToken || null,
         },
         session: newSession,
         savedQuizzesCount: (userData.quizzes || []).length,
@@ -617,6 +643,7 @@ async function executeMcpTool(env: Env, name: string, args: any, cfData: any, au
     }
 
     case 'register_user': {
+      // Maintained for backward compatibility, but omitted from AI tools list
       const { username, password, displayName } = args;
       const cleanUser = sanitizeUsername(username);
       if (!cleanUser || cleanUser.length < 3) throw new Error('Username must be at least 3 characters');
@@ -628,6 +655,7 @@ async function executeMcpTool(env: Env, name: string, args: any, cfData: any, au
       const now = new Date().toISOString();
       const userId = `usr_${cleanUser}_${Math.random().toString(36).substring(2, 7)}`;
       const tokenId = `tok_${Math.random().toString(36).substring(2, 12)}_${Date.now()}`;
+      const mcpToken = generateSecretMcpToken();
 
       const initialSession = {
         tokenId,
@@ -643,7 +671,13 @@ async function executeMcpTool(env: Env, name: string, args: any, cfData: any, au
         displayName: displayName?.trim() || cleanUser,
         createdAt: now,
         lastLogin: now,
+        mcpToken,
       };
+
+      await patchFirestoreDoc(env, `mcp_tokens/${mcpToken}`, {
+        username: cleanUser,
+        createdAt: now,
+      });
 
       await patchFirestoreDoc(env, `users/${cleanUser}`, {
         userId,
@@ -653,6 +687,7 @@ async function executeMcpTool(env: Env, name: string, args: any, cfData: any, au
         sessions: [initialSession],
         quizzes: [],
         history: [],
+        mcpToken,
         createdAt: now,
         lastLogin: now,
       });
@@ -666,7 +701,7 @@ async function executeMcpTool(env: Env, name: string, args: any, cfData: any, au
     }
 
     case 'get_user_library': {
-      const cleanUser = sanitizeUsername(args?.username);
+      const cleanUser = sanitizeUsername(args?.username || authenticatedUser);
       if (!cleanUser) throw new Error('Username is required');
 
       const userDoc = await getFirestoreDoc(env, `users/${cleanUser}`);
@@ -692,7 +727,7 @@ async function executeMcpTool(env: Env, name: string, args: any, cfData: any, au
     }
 
     case 'save_quiz_to_library': {
-      const cleanUser = sanitizeUsername(args?.username);
+      const cleanUser = sanitizeUsername(args?.username || authenticatedUser);
       if (!cleanUser) throw new Error('Username is required');
 
       const userDoc = await getFirestoreDoc(env, `users/${cleanUser}`);
@@ -730,7 +765,7 @@ async function executeMcpTool(env: Env, name: string, args: any, cfData: any, au
     }
 
     case 'get_user_history': {
-      const cleanUser = sanitizeUsername(args?.username);
+      const cleanUser = sanitizeUsername(args?.username || authenticatedUser);
       if (!cleanUser) throw new Error('Username is required');
 
       const userDoc = await getFirestoreDoc(env, `users/${cleanUser}`);
@@ -759,7 +794,7 @@ async function executeMcpTool(env: Env, name: string, args: any, cfData: any, au
         total,
         questions || [],
         userAnswers || [],
-        apiKeyOverride
+        args?.apiKey || apiKeyOverride
       );
 
       return {
@@ -793,8 +828,9 @@ async function executeMcpTool(env: Env, name: string, args: any, cfData: any, au
 
       return {
         status: 'online',
-        service: 'MCQHub Edge MCP Server',
+        service: authenticatedUser ? 'MCQHub Authenticated MCP Gateway' : 'MCQHub Edge MCP Server',
         version: '1.0.0',
+        authenticatedUser: authenticatedUser || null,
         edgeColo: cfData.colo || 'LOCAL',
         country: cfData.country || 'N/A',
         firestore: {
@@ -807,7 +843,7 @@ async function executeMcpTool(env: Env, name: string, args: any, cfData: any, au
           ready: true,
         },
         mcpEndpoints: {
-          httpRpc: 'https://mcqhub.adsbackend01.workers.dev/api/mcp',
+          publicRpc: 'https://mcqhub.adsbackend01.workers.dev/api/mcp',
           appFrontend: MCQ_HUB_PUBLIC_BASE,
         },
       };
@@ -871,7 +907,7 @@ export default {
         });
       }
 
-      // 2. Auth: Register endpoint
+      // 2. Auth: Register endpoint (REST API for website UI)
       if (url.pathname === '/api/auth/register' && request.method === 'POST') {
         const body = (await request.json()) as any;
         const { username, password, displayName } = body;
@@ -893,6 +929,7 @@ export default {
         const userId = `usr_${cleanUser}_${Math.random().toString(36).substring(2, 7)}`;
         const userAgent = request.headers.get('User-Agent') || 'Web Browser';
         const tokenId = `tok_${Math.random().toString(36).substring(2, 12)}_${Date.now()}`;
+        const mcpToken = generateSecretMcpToken();
 
         const initialSession = {
           tokenId,
@@ -908,7 +945,14 @@ export default {
           displayName: displayName?.trim() || cleanUser,
           createdAt: now,
           lastLogin: now,
+          mcpToken,
         };
+
+        // Write mapping doc for zero-password secret MCP link
+        await patchFirestoreDoc(env, `mcp_tokens/${mcpToken}`, {
+          username: cleanUser,
+          createdAt: now,
+        });
 
         await patchFirestoreDoc(env, `users/${cleanUser}`, {
           userId,
@@ -918,6 +962,7 @@ export default {
           sessions: [initialSession],
           quizzes: [],
           history: [],
+          mcpToken,
           createdAt: now,
           lastLogin: now,
         });
@@ -929,7 +974,7 @@ export default {
         });
       }
 
-      // 3. Auth: Login endpoint
+      // 3. Auth: Login endpoint (REST API for website UI)
       if (url.pathname === '/api/auth/login' && request.method === 'POST') {
         const body = (await request.json()) as any;
         const { username, password } = body;
@@ -959,6 +1004,15 @@ export default {
           status: 'active',
         };
 
+        let mcpToken = userData.mcpToken || null;
+        if (!mcpToken) {
+          mcpToken = generateSecretMcpToken();
+          await patchFirestoreDoc(env, `mcp_tokens/${mcpToken}`, {
+            username: cleanUser,
+            createdAt: now,
+          });
+        }
+
         const existingSessions = Array.isArray(userData.sessions) ? userData.sessions : [];
         const updatedSessions = [newSession, ...existingSessions.slice(0, 19)];
 
@@ -968,8 +1022,9 @@ export default {
           {
             sessions: updatedSessions,
             lastLogin: now,
+            mcpToken,
           },
-          ['sessions', 'lastLogin']
+          ['sessions', 'lastLogin', 'mcpToken']
         );
 
         const profile = {
@@ -978,6 +1033,7 @@ export default {
           displayName: userData.displayName,
           createdAt: userData.createdAt,
           lastLogin: now,
+          mcpToken,
         };
 
         return jsonResponse({
@@ -1034,6 +1090,7 @@ export default {
             displayName: userData.displayName,
             createdAt: userData.createdAt,
             lastLogin: userData.lastLogin,
+            mcpToken: userData.mcpToken || null,
           },
           quizzes: Array.isArray(userData.quizzes) ? userData.quizzes : [],
           history: Array.isArray(userData.history) ? userData.history : [],
@@ -1041,6 +1098,63 @@ export default {
           activeExam: userData.activeExam || null,
           encryptedApiKey: userData.encryptedApiKey || null,
           syncAiSettings: !!userData.syncAiSettings,
+        });
+      }
+
+      // 5b. User MCP Token Management Endpoint (Generate / Rotate / Revoke)
+      if (url.pathname === '/api/user/mcp-token' && request.method === 'POST') {
+        const body = (await request.json()) as any;
+        const { username, action = 'get' } = body;
+        const cleanUser = sanitizeUsername(username);
+        if (!cleanUser) {
+          return jsonResponse({ success: false, error: 'Username required' }, 400);
+        }
+
+        const userDoc = await getFirestoreDoc(env, `users/${cleanUser}`);
+        if (!userDoc) {
+          return jsonResponse({ success: false, error: 'User not found' }, 404);
+        }
+
+        const userData = parseDocFields(userDoc);
+        let currentToken = userData.mcpToken || null;
+        const now = new Date().toISOString();
+
+        if (action === 'revoke') {
+          if (currentToken) {
+            await deleteFirestoreDoc(env, `mcp_tokens/${currentToken}`);
+          }
+          await patchFirestoreDoc(env, `users/${cleanUser}`, { mcpToken: null }, ['mcpToken']);
+          return jsonResponse({ success: true, message: 'MCP token revoked', mcpToken: null });
+        }
+
+        if (action === 'generate' || !currentToken) {
+          if (currentToken) {
+            await deleteFirestoreDoc(env, `mcp_tokens/${currentToken}`);
+          }
+          const newToken = generateSecretMcpToken();
+          await patchFirestoreDoc(env, `mcp_tokens/${newToken}`, {
+            username: cleanUser,
+            createdAt: now,
+          });
+          await patchFirestoreDoc(env, `users/${cleanUser}`, { mcpToken: newToken }, ['mcpToken']);
+          currentToken = newToken;
+        } else {
+          // Ensure mapping document exists
+          const mappingDoc = await getFirestoreDoc(env, `mcp_tokens/${currentToken}`);
+          if (!mappingDoc) {
+            await patchFirestoreDoc(env, `mcp_tokens/${currentToken}`, {
+              username: cleanUser,
+              createdAt: now,
+            });
+          }
+        }
+
+        const mcpUrl = `https://mcqhub.adsbackend01.workers.dev/${currentToken}/mcp`;
+        return jsonResponse({
+          success: true,
+          username: cleanUser,
+          mcpToken: currentToken,
+          mcpUrl,
         });
       }
 
@@ -1324,26 +1438,64 @@ export default {
         }
       }
 
-      // 10. MCP (Model Context Protocol) Endpoint (JSON-RPC 2.0 & Discovery Gateway)
-      if (url.pathname === '/api/mcp') {
+      // 10. MCP (Model Context Protocol) Endpoint (Supports Public and Personalized Secret Auth URLs)
+      // Formats:
+      // - Public: /api/mcp or /mcp
+      // - Authenticated: /{secret_token}/mcp or /{secret_token}/MCP or /{secret_token}/api/mcp or /api/mcp?token={token}
+      const mcpTokenMatch = url.pathname.match(/^\/([a-zA-Z0-9_-]{12,64})\/(?:api\/)?mcp\/?$/i);
+      const isPublicMcp = url.pathname.toLowerCase() === '/api/mcp' || url.pathname.toLowerCase() === '/mcp';
+      const isMcpRoute = !!mcpTokenMatch || isPublicMcp;
+
+      if (isMcpRoute) {
+        const tokenCandidate = mcpTokenMatch
+          ? mcpTokenMatch[1]
+          : (url.searchParams.get('token') || (request.headers.get('Authorization') || '').replace('Bearer ', '').trim());
+
+        let authenticatedUser: string | null = null;
+        if (tokenCandidate && tokenCandidate.startsWith('mcp_')) {
+          authenticatedUser = await resolveMcpUser(env, tokenCandidate);
+        }
+
+        // Exclude login_user if already authenticated via secret token
+        const activeTools = authenticatedUser
+          ? MCP_TOOLS_DEFINITIONS.filter(t => t.name !== 'login_user')
+          : MCP_TOOLS_DEFINITIONS;
+
         if (request.method === 'GET') {
           return jsonResponse({
             ok: true,
-            service: 'MCQHub Model Context Protocol (MCP) Edge Server',
+            service: authenticatedUser ? 'MCQHub Authenticated MCP Gateway' : 'MCQHub Model Context Protocol (MCP) Edge Server',
             version: '1.0.0',
             status: 'online',
+            authenticatedUser: authenticatedUser || null,
+            mode: authenticatedUser ? 'authenticated' : 'public',
             protocol: 'Model Context Protocol JSON-RPC 2.0',
-            endpoint: 'https://mcqhub.adsbackend01.workers.dev/api/mcp',
-            toolsCount: MCP_TOOLS_DEFINITIONS.length,
-            tools: MCP_TOOLS_DEFINITIONS,
+            endpoint: authenticatedUser
+              ? `https://mcqhub.adsbackend01.workers.dev/${tokenCandidate}/mcp`
+              : 'https://mcqhub.adsbackend01.workers.dev/api/mcp',
+            message: authenticatedUser
+              ? `Zero-password authentication active for @${authenticatedUser}. Generated assessments automatically link to your personal library.`
+              : 'Public guest MCP server ready. For automatic library sync, use your personal MCP link from your account settings.',
+            toolsCount: activeTools.length,
+            tools: activeTools,
             clientSetup: {
               claudeDesktop: {
                 command: 'node',
                 args: ['mcp-server/index.mjs'],
+                env: {
+                  MCQHUB_API_URL: authenticatedUser
+                    ? `https://mcqhub.adsbackend01.workers.dev/${tokenCandidate}/mcp`
+                    : 'https://mcqhub.adsbackend01.workers.dev/api/mcp',
+                },
               },
               cursor: {
                 type: 'command',
                 command: 'node ./mcp-server/index.mjs',
+                env: {
+                  MCQHUB_API_URL: authenticatedUser
+                    ? `https://mcqhub.adsbackend01.workers.dev/${tokenCandidate}/mcp`
+                    : 'https://mcqhub.adsbackend01.workers.dev/api/mcp',
+                },
               },
               windsurf: {
                 command: 'node',
@@ -1379,6 +1531,7 @@ export default {
                   serverInfo: {
                     name: 'mcqhub-mcp-server',
                     version: '1.0.0',
+                    ...(authenticatedUser ? { authenticatedUser } : {}),
                   },
                 },
               };
@@ -1404,7 +1557,7 @@ export default {
                 jsonrpc: '2.0',
                 id,
                 result: {
-                  tools: MCP_TOOLS_DEFINITIONS,
+                  tools: activeTools,
                 },
               };
             }
@@ -1416,7 +1569,14 @@ export default {
               const authHeader = request.headers.get('Authorization') || undefined;
 
               try {
-                const executionResult = await executeMcpTool(env, toolName, toolArgs, cfData, authHeader);
+                const executionResult = await executeMcpTool(
+                  env,
+                  toolName,
+                  toolArgs,
+                  cfData,
+                  authHeader,
+                  authenticatedUser
+                );
                 return {
                   jsonrpc: '2.0',
                   id,

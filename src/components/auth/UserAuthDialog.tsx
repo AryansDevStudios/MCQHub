@@ -33,12 +33,16 @@ import {
   ExternalLink,
   ShieldCheck,
   Lock,
+  Bot,
+  Globe,
 } from 'lucide-react';
 import {
   getUserSessionsFirestore,
   saveUserAiTokenFirestore,
   deleteUserAiTokenFirestore,
   fetchUserDataFirestore,
+  getUserMcpTokenFirestore,
+  rotateUserMcpTokenFirestore,
 } from '@/lib/firestoreDb';
 import { encryptToken } from '@/lib/crypto';
 import type { UserSession } from '@/lib/types';
@@ -46,7 +50,7 @@ import type { UserSession } from '@/lib/types';
 interface UserAuthDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  defaultTab?: 'auth' | 'sessions' | 'settings';
+  defaultTab?: 'auth' | 'sessions' | 'settings' | 'mcp';
 }
 
 const STORAGE_API_KEY = 'mcqhub_gemini_api_key';
@@ -67,7 +71,7 @@ export function UserAuthDialog({ open, onOpenChange, defaultTab = 'auth' }: User
     addToast,
   } = useQuiz();
 
-  const [activeTab, setActiveTab] = useState<'auth' | 'sessions' | 'settings'>(defaultTab);
+  const [activeTab, setActiveTab] = useState<'auth' | 'sessions' | 'settings' | 'mcp'>(defaultTab);
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
   const [username, setUsername] = useState('');
   const [displayName, setDisplayName] = useState('');
@@ -85,12 +89,22 @@ export function UserAuthDialog({ open, onOpenChange, defaultTab = 'auth' }: User
   const [isDeletingCloudToken, setIsDeletingCloudToken] = useState(false);
   const [hasCloudSyncedKey, setHasCloudSyncedKey] = useState(false);
 
+  // MCP Secret Link state
+  const [mcpToken, setMcpToken] = useState<string | null>(null);
+  const [mcpUrl, setMcpUrl] = useState<string | null>(null);
+  const [isLoadingMcp, setIsLoadingMcp] = useState(false);
+  const [isRotatingMcp, setIsRotatingMcp] = useState(false);
+  const [copiedMcpUrl, setCopiedMcpUrl] = useState(false);
+  const [copiedSnippet, setCopiedSnippet] = useState(false);
+  const [selectedClient, setSelectedClient] = useState<'cursor' | 'claude' | 'windsurf'>('cursor');
+
   useEffect(() => {
     if (open) {
       setActiveTab(defaultTab);
       if (user) {
         loadSessions(user.username);
         checkCloudAiToken(user.username);
+        loadMcpInfo(user.username);
       }
       try {
         const stored = localStorage.getItem(STORAGE_API_KEY);
@@ -101,6 +115,40 @@ export function UserAuthDialog({ open, onOpenChange, defaultTab = 'auth' }: User
       } catch {}
     }
   }, [open, defaultTab, user]);
+
+  const loadMcpInfo = async (uname: string) => {
+    setIsLoadingMcp(true);
+    try {
+      const res = await getUserMcpTokenFirestore(uname);
+      if (res.success && res.mcpToken && res.mcpUrl) {
+        setMcpToken(res.mcpToken);
+        setMcpUrl(res.mcpUrl);
+      }
+    } catch (err) {
+      console.warn('Failed to load MCP info:', err);
+    } finally {
+      setIsLoadingMcp(false);
+    }
+  };
+
+  const handleRotateMcpToken = async () => {
+    if (!user) return;
+    setIsRotatingMcp(true);
+    try {
+      const res = await rotateUserMcpTokenFirestore(user.username);
+      if (res.success && res.mcpToken && res.mcpUrl) {
+        setMcpToken(res.mcpToken);
+        setMcpUrl(res.mcpUrl);
+        addToast('New secret MCP link generated! Old link revoked.', 'success');
+      } else {
+        addToast('Failed to regenerate MCP link', 'error');
+      }
+    } catch {
+      addToast('Network error while generating MCP link', 'error');
+    } finally {
+      setIsRotatingMcp(false);
+    }
+  };
 
   const checkCloudAiToken = async (uname: string) => {
     try {
@@ -228,6 +276,24 @@ export function UserAuthDialog({ open, onOpenChange, defaultTab = 'auth' }: User
     } catch {}
   };
 
+  const getClientConfigSnippet = (client: 'cursor' | 'claude' | 'windsurf', endpoint: string) => {
+    return JSON.stringify(
+      {
+        mcpServers: {
+          mcqhub: {
+            command: 'node',
+            args: ['d:/MCQHub/mcp-server/index.mjs'],
+            env: {
+              MCQHUB_API_URL: endpoint,
+            },
+          },
+        },
+      },
+      null,
+      2
+    );
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="w-[calc(100vw-1.5rem)] max-w-md sm:max-w-lg max-h-[90vh] bg-card border-border text-foreground p-0 rounded-xl shadow-2xl flex flex-col overflow-hidden my-auto">
@@ -236,14 +302,24 @@ export function UserAuthDialog({ open, onOpenChange, defaultTab = 'auth' }: User
         <DialogHeader className="px-4 sm:px-5 pt-4 pb-3 pr-12 border-b border-border/60 bg-muted/20 shrink-0">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shrink-0">
-              {activeTab === 'settings' ? <Settings className="w-4 h-4" /> : <User className="w-4 h-4" />}
+              {activeTab === 'settings' ? (
+                <Settings className="w-4 h-4" />
+              ) : activeTab === 'mcp' ? (
+                <Bot className="w-4 h-4" />
+              ) : (
+                <User className="w-4 h-4" />
+              )}
             </div>
             <div className="min-w-0">
               <DialogTitle className="text-sm sm:text-base font-semibold tracking-tight truncate">
-                {user ? 'Account & Settings' : 'Sign In & Settings'}
+                {user ? (activeTab === 'mcp' ? 'AI MCP Assistant Integration' : 'Account & Settings') : 'Sign In & Settings'}
               </DialogTitle>
               <DialogDescription className="text-[11px] sm:text-xs text-muted-foreground truncate">
-                {activeTab === 'settings' ? 'Configure personal API keys & cloud sync' : 'Sync your quizzes and history across devices'}
+                {activeTab === 'settings'
+                  ? 'Configure personal API keys & cloud sync'
+                  : activeTab === 'mcp'
+                  ? 'Zero-password AI assistant link (Cursor, Claude, Windsurf)'
+                  : 'Sync your quizzes and history across devices'}
               </DialogDescription>
             </div>
           </div>
@@ -252,16 +328,20 @@ export function UserAuthDialog({ open, onOpenChange, defaultTab = 'auth' }: User
         {/* Tab Controls - Fixed under header */}
         <div className="px-4 sm:px-5 pt-3 pb-1 shrink-0">
           <Tabs value={activeTab} onValueChange={(val: any) => setActiveTab(val)} className="w-full">
-            <TabsList className="grid grid-cols-3 bg-muted/40 p-1 text-xs rounded-lg">
-              <TabsTrigger value="auth" className="gap-1 sm:gap-1.5 text-[11px] sm:text-xs py-1.5 px-1 truncate">
+            <TabsList className="grid grid-cols-4 bg-muted/40 p-1 text-xs rounded-lg">
+              <TabsTrigger value="auth" className="gap-1 text-[11px] sm:text-xs py-1.5 px-1 truncate">
                 <User className="w-3.5 h-3.5 shrink-0" />
                 <span className="truncate">{user ? 'Account' : 'Sign In'}</span>
               </TabsTrigger>
-              <TabsTrigger value="settings" className="gap-1 sm:gap-1.5 text-[11px] sm:text-xs py-1.5 px-1 truncate">
+              <TabsTrigger value="mcp" className="gap-1 text-[11px] sm:text-xs py-1.5 px-1 truncate">
+                <Bot className="w-3.5 h-3.5 shrink-0 text-primary" />
+                <span className="truncate">AI MCP</span>
+              </TabsTrigger>
+              <TabsTrigger value="settings" className="gap-1 text-[11px] sm:text-xs py-1.5 px-1 truncate">
                 <Settings className="w-3.5 h-3.5 shrink-0" />
                 <span className="truncate">Settings</span>
               </TabsTrigger>
-              <TabsTrigger value="sessions" className="gap-1 sm:gap-1.5 text-[11px] sm:text-xs py-1.5 px-1 truncate" disabled={!user}>
+              <TabsTrigger value="sessions" className="gap-1 text-[11px] sm:text-xs py-1.5 px-1 truncate" disabled={!user}>
                 <History className="w-3.5 h-3.5 shrink-0" />
                 <span className="truncate">Devices</span>
               </TabsTrigger>
@@ -420,7 +500,139 @@ export function UserAuthDialog({ open, onOpenChange, defaultTab = 'auth' }: User
               )}
             </TabsContent>
 
-            {/* TAB 2: SETTINGS (API KEY & PREFERENCES) */}
+            {/* TAB: AI MCP INTEGRATION (ZERO-PASSWORD AUTH) */}
+            <TabsContent value="mcp" className="space-y-3 focus-visible:outline-none m-0">
+              {!user ? (
+                <div className="py-8 text-center space-y-2 border border-dashed border-border/80 rounded-lg p-4">
+                  <Bot className="w-8 h-8 mx-auto text-muted-foreground opacity-60" />
+                  <div className="text-xs font-semibold">Sign In to Access Your MCP URL</div>
+                  <p className="text-[11px] text-muted-foreground max-w-xs mx-auto leading-relaxed">
+                    Sign in with your account to get your personalized zero-password MCP endpoint for Cursor, Claude Desktop, and Windsurf.
+                  </p>
+                  <Button size="sm" className="h-7 text-xs mt-2" onClick={() => setActiveTab('auth')}>
+                    Go to Sign In
+                  </Button>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {/* Overview Card */}
+                  <div className="p-3 rounded-lg border border-primary/20 bg-primary/5 text-xs space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold text-primary flex items-center gap-1.5 text-xs">
+                        <Bot className="w-4 h-4" />
+                        Zero-Password AI Authentication
+                      </span>
+                      <Badge variant="outline" className="bg-emerald-500/10 text-emerald-500 border-emerald-500/20 text-[10px] py-0">
+                        Connected
+                      </Badge>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground leading-relaxed">
+                      Connect your AI assistant (Cursor, Windsurf, Claude Desktop, Antigravity) with zero passwords. Quizzes generated by your AI automatically sync directly into your personal MCQHub library across all your devices.
+                    </p>
+                  </div>
+
+                  {/* Secret Personal Endpoint Box */}
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-xs font-medium flex items-center gap-1">
+                        <KeyRound className="w-3.5 h-3.5 text-primary" />
+                        Your Private MCP Endpoint
+                      </Label>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        disabled={isRotatingMcp || isLoadingMcp}
+                        onClick={handleRotateMcpToken}
+                        className="h-6 text-[10px] px-2 text-muted-foreground hover:text-foreground gap-1"
+                      >
+                        <RefreshCw className={`w-3 h-3 ${isRotatingMcp ? 'animate-spin text-primary' : ''}`} />
+                        Regenerate Secret Link
+                      </Button>
+                    </div>
+
+                    <div className="flex items-center gap-1.5">
+                      <Input
+                        readOnly
+                        value={isLoadingMcp ? 'Loading secret URL...' : (mcpUrl || '')}
+                        className="h-8 text-[11px] font-mono bg-background text-muted-foreground select-all"
+                      />
+                      <Button
+                        type="button"
+                        size="sm"
+                        disabled={!mcpUrl || isLoadingMcp}
+                        onClick={() => {
+                          if (mcpUrl) {
+                            navigator.clipboard.writeText(mcpUrl);
+                            setCopiedMcpUrl(true);
+                            setTimeout(() => setCopiedMcpUrl(false), 2000);
+                            addToast('Personal MCP endpoint copied to clipboard!', 'success');
+                          }
+                        }}
+                        className="h-8 px-2.5 shrink-0 text-xs gap-1"
+                      >
+                        {copiedMcpUrl ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                        <span>{copiedMcpUrl ? 'Copied' : 'Copy'}</span>
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Client Setup Snippets */}
+                  <div className="space-y-1.5 pt-1">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-xs font-medium">Quick Setup Snippet</Label>
+                      <div className="flex gap-1">
+                        {(['cursor', 'claude', 'windsurf'] as const).map((client) => (
+                          <Button
+                            key={client}
+                            type="button"
+                            variant={selectedClient === client ? 'secondary' : 'ghost'}
+                            size="sm"
+                            className="h-6 text-[10px] px-2 capitalize"
+                            onClick={() => setSelectedClient(client)}
+                          >
+                            {client === 'claude' ? 'Claude' : client === 'cursor' ? 'Cursor' : 'Windsurf'}
+                          </Button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="relative rounded-md bg-muted/40 border border-border/60 p-2 text-[10px] font-mono text-muted-foreground overflow-x-auto">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          const snippet = getClientConfigSnippet(selectedClient, mcpUrl || '');
+                          navigator.clipboard.writeText(snippet);
+                          setCopiedSnippet(true);
+                          setTimeout(() => setCopiedSnippet(false), 2000);
+                          addToast(`Copied ${selectedClient} configuration snippet!`, 'success');
+                        }}
+                        className="absolute top-1.5 right-1.5 h-6 px-2 text-[10px] gap-1 bg-background/80 hover:bg-background border border-border/40"
+                      >
+                        {copiedSnippet ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                        {copiedSnippet ? 'Copied' : 'Copy Config'}
+                      </Button>
+                      <pre className="pr-16 leading-relaxed">
+                        {getClientConfigSnippet(selectedClient, mcpUrl || 'https://mcqhub.adsbackend01.workers.dev/YOUR_SECRET_TOKEN/mcp')}
+                      </pre>
+                    </div>
+                  </div>
+
+                  {/* Open / Guest Endpoint Note */}
+                  <div className="p-2.5 rounded bg-muted/20 border border-border/40 text-[10px] text-muted-foreground flex items-start gap-2">
+                    <Globe className="w-3.5 h-3.5 text-muted-foreground shrink-0 mt-0.5" />
+                    <div className="leading-relaxed">
+                      <span className="font-semibold text-foreground">Open / Guest Endpoint: </span>
+                      The public URL <code className="bg-background px-1 py-0.5 rounded text-[9px]">https://mcqhub.adsbackend01.workers.dev/api/mcp</code> is always available for unauthenticated guest tests and general AI evaluation.
+                    </div>
+                  </div>
+                </div>
+              )}
+            </TabsContent>
+
+            {/* TAB 3: SETTINGS (API KEY & PREFERENCES) */}
             <TabsContent value="settings" className="space-y-4 focus-visible:outline-none m-0">
               <div className="p-3.5 rounded-lg border border-border/80 bg-muted/20 space-y-3">
                 <div className="flex items-center justify-between">

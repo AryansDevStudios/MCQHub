@@ -58,6 +58,7 @@ export interface UserProfile {
   displayName: string;
   createdAt: string;
   lastLogin: string;
+  mcpToken?: string;
 }
 
 export interface UserSession {
