@@ -28,18 +28,18 @@ export function JoinQuizDialog() {
 
   return (
     <Dialog open={joinModalOpen} onOpenChange={setJoinModalOpen}>
-      <DialogContent className="w-[calc(100vw-2rem)] max-w-md bg-card border border-border text-foreground rounded-2xl shadow-xl p-0 overflow-hidden">
+      <DialogContent className="w-[calc(100vw-2rem)] max-w-md max-h-[90vh] bg-card border border-border text-foreground rounded-2xl shadow-xl p-0 flex flex-col overflow-hidden">
         {/* Header */}
-        <DialogHeader className="px-6 pt-6 pb-4 border-b border-border">
-          <div className="flex items-center gap-3">
+        <DialogHeader className="px-5 sm:px-6 pt-5 sm:pt-6 pb-4 border-b border-border shrink-0">
+          <div className="flex items-center gap-3 pr-6 min-w-0">
             <div className="w-8 h-8 rounded-xl bg-secondary flex items-center justify-center text-muted-foreground shrink-0">
               <KeyRound className="w-4 h-4" />
             </div>
-            <div className="min-w-0">
-              <DialogTitle className="text-base font-semibold text-foreground tracking-tight">
+            <div className="min-w-0 flex-1">
+              <DialogTitle className="text-base font-semibold text-foreground tracking-tight truncate">
                 Open Shared Assessment
               </DialogTitle>
-              <DialogDescription className="text-sm text-muted-foreground mt-0.5">
+              <DialogDescription className="text-xs sm:text-sm text-muted-foreground mt-0.5 line-clamp-2">
                 Enter the 5-digit code or paste a direct shared assessment link.
               </DialogDescription>
             </div>

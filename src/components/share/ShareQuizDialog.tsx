@@ -40,18 +40,18 @@ export function ShareQuizDialog() {
 
   return (
     <Dialog open={shareModalOpen} onOpenChange={setShareModalOpen}>
-      <DialogContent className="w-[calc(100vw-2rem)] max-w-md bg-card border border-border text-foreground rounded-2xl shadow-xl p-0 overflow-hidden">
+      <DialogContent className="w-[calc(100vw-2rem)] max-w-md max-h-[90vh] bg-card border border-border text-foreground rounded-2xl shadow-xl p-0 flex flex-col overflow-hidden">
         {/* Header */}
-        <DialogHeader className="px-6 pt-6 pb-4 border-b border-border">
-          <div className="flex items-center gap-3">
+        <DialogHeader className="px-5 sm:px-6 pt-5 sm:pt-6 pb-4 border-b border-border shrink-0">
+          <div className="flex items-center gap-3 pr-6 min-w-0">
             <div className="w-8 h-8 rounded-xl bg-secondary flex items-center justify-center text-muted-foreground shrink-0">
               <Share2 className="w-4 h-4" />
             </div>
-            <div className="min-w-0">
-              <DialogTitle className="text-base font-semibold text-foreground tracking-tight">
+            <div className="min-w-0 flex-1">
+              <DialogTitle className="text-base font-semibold text-foreground tracking-tight truncate">
                 Share Assessment
               </DialogTitle>
-              <DialogDescription className="text-sm text-muted-foreground mt-0.5">
+              <DialogDescription className="text-xs sm:text-sm text-muted-foreground mt-0.5 line-clamp-2">
                 Anyone can open this test on mobile or laptop, signed in or as guest.
               </DialogDescription>
             </div>
@@ -59,20 +59,20 @@ export function ShareQuizDialog() {
         </DialogHeader>
 
         {/* Content */}
-        <div className="px-6 py-5 space-y-5">
+        <div className="px-5 sm:px-6 py-5 space-y-4 sm:space-y-5 overflow-y-auto min-w-0 flex-1">
           {/* Quiz Summary Card */}
-          <div className="rounded-xl border border-border bg-secondary/50 p-4 space-y-2">
-            <div className="flex items-start justify-between gap-2">
-              <h4 className="text-sm font-semibold text-foreground truncate">
+          <div className="rounded-xl border border-border bg-secondary/50 p-3.5 sm:p-4 space-y-2 min-w-0">
+            <div className="flex items-start justify-between gap-2 min-w-0">
+              <h4 className="text-sm font-semibold text-foreground truncate min-w-0 flex-1" title={activeShareData.quiz.title || 'Untitled Assessment'}>
                 {activeShareData.quiz.title || 'Untitled Assessment'}
               </h4>
               <Badge variant="outline" className="text-xs text-primary border-border bg-background shrink-0 font-mono">
                 {activeShareData.quiz.questions?.length ?? 0} Questions
               </Badge>
             </div>
-            <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+            <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground min-w-0">
               {(activeShareData.quiz.originalCreator || activeShareData.quiz.createdBy) && (
-                <span>
+                <span className="truncate max-w-[220px]">
                   Original Creator: <strong className="text-foreground">@{activeShareData.quiz.originalCreator || activeShareData.quiz.createdBy}</strong>
                 </span>
               )}
@@ -86,12 +86,12 @@ export function ShareQuizDialog() {
           </div>
 
           {/* Share Code (5-Digit Code) */}
-          <div className="space-y-2">
-            <div className="flex items-center justify-between text-xs">
+          <div className="space-y-2 min-w-0">
+            <div className="flex items-center justify-between gap-2 text-xs flex-wrap min-w-0">
               <span className="font-medium text-foreground">5-Digit Share Code</span>
-              <span className="text-muted-foreground">Enter on any device in &quot;Open Shared&quot;</span>
+              <span className="text-muted-foreground text-[11px] sm:text-xs">Enter on any device in &quot;Open Shared&quot;</span>
             </div>
-            <div className="font-mono text-2xl font-bold tracking-[0.3em] text-foreground bg-secondary rounded-xl py-4 text-center select-all border border-border">
+            <div className="font-mono text-2xl font-bold tracking-[0.3em] text-foreground bg-secondary rounded-xl py-3.5 text-center select-all border border-border">
               {activeShareData.shareId}
             </div>
             <div className="flex justify-end">
@@ -108,10 +108,10 @@ export function ShareQuizDialog() {
           </div>
 
           {/* Share Link */}
-          <div className="space-y-2">
-            <div className="flex items-center justify-between text-xs">
+          <div className="space-y-2 min-w-0">
+            <div className="flex items-center justify-between gap-2 text-xs flex-wrap min-w-0">
               <span className="font-medium text-foreground">Direct Link</span>
-              <span className="text-muted-foreground">Universal (Any device)</span>
+              <span className="text-muted-foreground text-[11px] sm:text-xs">Universal (Any device)</span>
             </div>
             <div className="font-mono text-xs text-muted-foreground bg-secondary rounded-xl px-3 py-2.5 break-all select-all border border-border">
               {activeShareData.shareUrl}
@@ -131,7 +131,7 @@ export function ShareQuizDialog() {
 
           {/* Shared Account Info (if signed in) */}
           {user && (
-            <div className="rounded-xl border border-border bg-secondary/50 p-3.5 space-y-1">
+            <div className="rounded-xl border border-border bg-secondary/50 p-3.5 space-y-1 min-w-0">
               <div className="flex items-center gap-1.5 text-xs font-semibold text-primary">
                 <Users className="w-3.5 h-3.5" />
                 <span>Shared Account Access</span>
@@ -149,7 +149,7 @@ export function ShareQuizDialog() {
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-border flex justify-end bg-background">
+        <div className="px-5 sm:px-6 py-3.5 sm:py-4 border-t border-border flex justify-end bg-card shrink-0">
           <Button
             size="sm"
             variant="outline"
