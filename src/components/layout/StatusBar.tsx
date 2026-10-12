@@ -33,7 +33,7 @@ export function StatusBar() {
       {/* Right Section: Brand Attribution */}
       <div className="flex items-center gap-2 shrink-0">
         <span className="text-muted-foreground/60">
-          Aryan&apos;s Dev Studios
+          AryansDevStudios
         </span>
       </div>
     </footer>
