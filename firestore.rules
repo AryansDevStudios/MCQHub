@@ -1,30 +1,130 @@
 rules_version = '2';
 
-// Cloud Firestore Security Rules for MCQHub
-// Database hierarchy:
-// - /system/heuristic : ping / latency / status check
-// - /users/{username} : user account credentials, sessions history, quizzes, and past exam attempts
+// =========================================================================
+// MCQHub Production Firestore Security Rules
+// =========================================================================
+// Architecture Note:
+// All client traffic routes through the Cloudflare Worker Edge Gateway
+// (https://mcqhub.adsbackend01.workers.dev).
+// Edge worker accesses Firestore via Google REST API with Firebase Web API key.
+//
+// Security Objectives:
+// 1. Strict Collection Isolation: Only explicitly mapped collections exist.
+// 2. Prevent Mass Scraping / Dumps: 'list' queries are completely disabled
+//    on users, mcp_tokens, and shared_quizzes to block enumeration attacks.
+// 3. Immutability: Shared quizzes are write-once; tampering and deleting is blocked.
+// 4. Schema & Identifier Validation: Validate regex on keys and required fields.
+// 5. Default Deny: All unmapped documents and wildcard queries are rejected.
+// =========================================================================
 
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // 1. System diagnostics and heuristic check
-    match /system/{document=**} {
-      allow read, write: if true;
+    // ---------------------------------------------------------------------
+    // Helper Validation Functions
+    // ---------------------------------------------------------------------
+
+    // Validates 5-digit PIN or safe alphanumeric share code
+    function isValidShareId(id) {
+      return id.matches('^[a-zA-Z0-9_-]{4,32}$');
     }
 
-    // 2. User Data Collections
-    // Development / Test mode (wildcard access):
+    // Validates sanitized username (3-30 chars, lowercase alphanumeric, underscore, hyphen)
+    function isValidUsername(name) {
+      return name.matches('^[a-z0-9_-]{3,30}$');
+    }
+
+    // Validates MCP secret access token format
+    function isValidMcpToken(tok) {
+      return tok.matches('^[a-zA-Z0-9_-]{12,64}$');
+    }
+
+    // ---------------------------------------------------------------------
+    // 1. System Diagnostics & Health Probe (/system/{docId})
+    // ---------------------------------------------------------------------
+    match /system/{docId} {
+      // Allow exact document read for latency check
+      allow get: if docId == 'heuristic';
+
+      // Allow worker edge health write with reasonable field limit
+      allow create, update: if docId == 'heuristic'
+                            && request.resource.data.size() <= 10;
+
+      // Prevent listing all system documents or deleting diagnostics
+      allow list, delete: if false;
+    }
+
+    // ---------------------------------------------------------------------
+    // 2. Shared Assessments (/shared_quizzes/{shareId})
+    // ---------------------------------------------------------------------
+    match /shared_quizzes/{shareId} {
+      // Anyone with the exact 5-digit PIN / share code can load the assessment
+      allow get: if isValidShareId(shareId);
+
+      // Block collection list queries: prevents bad actors from enumerating/scraping all quizzes
+      allow list: if false;
+
+      // Allow creating a new shared quiz with required fields and valid ID
+      allow create: if isValidShareId(shareId)
+                    && request.resource.data.keys().hasAll(['shareId', 'quiz', 'createdAt'])
+                    && request.resource.data.shareId == shareId
+                    && request.resource.data.size() <= 20;
+
+      // Quizzes are strictly immutable once published: prevent tampering and deletion
+      allow update, delete: if false;
+    }
+
+    // ---------------------------------------------------------------------
+    // 3. User Accounts & Data Store (/users/{username})
+    // ---------------------------------------------------------------------
     match /users/{username} {
-      allow read, write: if true;
-    }
-    match /users/{username}/{subcollection=**} {
-      allow read, write: if true;
+      // Allow point lookup by exact sanitized username
+      allow get: if isValidUsername(username);
+
+      // Block collection list queries: prevents harvesting user directories
+      allow list: if false;
+
+      // Registration: allow creating user with required profile fields
+      allow create: if isValidUsername(username)
+                    && request.resource.data.keys().hasAll(['username', 'passwordHash', 'createdAt'])
+                    && request.resource.data.username == username
+                    && request.resource.data.size() <= 30;
+
+      // Profile updates: allow syncing quizzes, history, sessions, or preferences
+      // Guard against changing username or createdAt
+      allow update: if isValidUsername(username)
+                    && (!('username' in request.resource.data) || request.resource.data.username == username)
+                    && (!('createdAt' in resource.data) || !('createdAt' in request.resource.data) || request.resource.data.createdAt == resource.data.createdAt)
+                    && request.resource.data.size() <= 30;
+
+      // Prevent account deletion via unauthenticated API
+      allow delete: if false;
     }
 
-    // Fallback wildcard for any additional collection:
+    // ---------------------------------------------------------------------
+    // 4. Secret MCP Token Registry (/mcp_tokens/{token})
+    // ---------------------------------------------------------------------
+    match /mcp_tokens/{token} {
+      // Lookup mapped username by secret token
+      allow get: if isValidMcpToken(token);
+
+      // Block collection enumeration: secret tokens cannot be listed or discovered
+      allow list: if false;
+
+      // Allow creating or updating secret token mapping
+      allow create, update: if isValidMcpToken(token)
+                            && request.resource.data.username is string
+                            && request.resource.data.size() <= 10;
+
+      // Allow revoking / rotating token
+      allow delete: if isValidMcpToken(token);
+    }
+
+    // ---------------------------------------------------------------------
+    // 5. Default Deny Fallback
+    // ---------------------------------------------------------------------
     match /{document=**} {
-      allow read, write: if true;
+      allow read, write: if false;
     }
   }
 }
