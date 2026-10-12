@@ -6,7 +6,6 @@ import MarkdownRenderer from '@/components/MarkdownRenderer';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
-import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import {
   Dialog,
@@ -82,21 +81,30 @@ export function QuizView() {
         return;
       }
 
-      const currentQ = activeQuiz.questions[currentQuestionIndex];
-      if (!currentQ) return;
       const totalQ = activeQuiz.questions.length;
-      const isCurChecked = !!checkedQuestions[currentQuestionIndex];
-      const curSelected = userAnswers[currentQuestionIndex];
+      const safeIdx = Math.min(Math.max(0, currentQuestionIndex), totalQ - 1);
+      const currentQ = activeQuiz.questions[safeIdx];
+      if (!currentQ) return;
+      const isCurChecked = !!checkedQuestions[safeIdx];
+      const curSelected = userAnswers[safeIdx];
 
-      // 3. Option Selection: Keys 1 through 9 (standard top-row numbers or numpad)
+      // 3. Option Selection: Keys 1 through 9 or letter keys A through L
+      let optIdx: number | null = null;
       const numMatch = e.code.match(/^(Digit|Numpad)([1-9])$/);
       if (numMatch) {
-        const optionNum = parseInt(numMatch[2], 10);
-        const optIdx = optionNum - 1;
-        if (currentQ.options && optIdx < currentQ.options.length) {
+        optIdx = parseInt(numMatch[2], 10) - 1;
+      } else if (!e.ctrlKey && !e.metaKey && !e.altKey) {
+        const keyUpper = e.key.toUpperCase();
+        if (keyUpper.length === 1 && keyUpper >= 'A' && keyUpper <= 'L') {
+          optIdx = keyUpper.charCodeAt(0) - 65;
+        }
+      }
+
+      if (optIdx !== null) {
+        if (currentQ.options && optIdx >= 0 && optIdx < currentQ.options.length) {
           if (!(isInstantMode && isCurChecked)) {
             e.preventDefault();
-            selectAnswer(currentQuestionIndex, optIdx);
+            selectAnswer(safeIdx, optIdx);
           }
         }
         return;
@@ -192,35 +200,38 @@ export function QuizView() {
 
     if (isLoadingSharedQuiz || isSharedUrlPresent) {
       return (
-        <div className="max-w-md mx-auto py-20 px-4 text-center space-y-4">
-          <Loader2 className="w-8 h-8 text-primary animate-spin mx-auto" />
-          <h2 className="text-base font-semibold">Loading Assessment...</h2>
-          <p className="text-xs text-muted-foreground">
-            Fetching assessment questions from MCQHub cloud. Please wait a moment.
-          </p>
+        <div className="flex flex-col items-center justify-center py-24 text-center">
+          <Loader2 className="w-5 h-5 text-primary animate-spin" />
+          <p className="text-sm text-muted-foreground mt-3">Loading assessment...</p>
         </div>
       );
     }
 
     return (
-      <div className="max-w-md mx-auto py-16 px-4 text-center space-y-4">
-        <AlertCircle className="w-10 h-10 text-muted-foreground/60 mx-auto" />
-        <h2 className="text-base font-semibold">No active quiz loaded.</h2>
-        <p className="text-xs text-muted-foreground max-w-sm mx-auto">
+      <div className="max-w-sm mx-auto py-20 text-center space-y-3">
+        <AlertCircle className="w-8 h-8 text-muted-foreground mx-auto" />
+        <h2 className="text-base font-medium text-foreground">No active quiz loaded</h2>
+        <p className="text-sm text-muted-foreground">
           Please select a quiz from your Library, generate a new one with AI, or import JSON to get started.
         </p>
-        <Button onClick={() => setView('home')} size="sm">
-          Return to Home
-        </Button>
+        <div className="pt-2">
+          <Button
+            onClick={() => setView('home')}
+            className="bg-primary text-primary-foreground rounded-lg px-4 py-2 text-sm hover:bg-primary/90"
+          >
+            Return to Home
+          </Button>
+        </div>
       </div>
     );
   }
 
-  const currentQuestion = activeQuiz.questions[currentQuestionIndex];
   const totalQuestions = activeQuiz.questions.length;
-  const isChecked = !!checkedQuestions[currentQuestionIndex];
-  const selectedOptionIndex = userAnswers[currentQuestionIndex];
-  const currentNote = questionNotes[currentQuestionIndex] || '';
+  const safeQuestionIndex = Math.min(Math.max(0, currentQuestionIndex), Math.max(0, totalQuestions - 1));
+  const currentQuestion = activeQuiz.questions[safeQuestionIndex] || activeQuiz.questions[0];
+  const isChecked = !!checkedQuestions[safeQuestionIndex];
+  const selectedOptionIndex = userAnswers[safeQuestionIndex];
+  const currentNote = questionNotes[safeQuestionIndex] || '';
 
   // Ultra-accurate Millisecond Timer format
   const totalMs = elapsedMs || elapsedSeconds * 1000;
@@ -230,123 +241,113 @@ export function QuizView() {
   const timeFormatted = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
   const msFormatted = String(millis).padStart(3, '0');
 
-  const progressPercent = Math.round(((currentQuestionIndex + 1) / totalQuestions) * 100);
+  const progressPercent = Math.round(((safeQuestionIndex + 1) / totalQuestions) * 100);
 
   const optionLetters = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L'];
 
   return (
-    <div className="max-w-3xl mx-auto px-3 sm:px-6 py-6 pb-20 space-y-5">
-      
-      {/* Top Header Strip */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-border/80 pb-3">
-        <div className="space-y-0.5">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="font-mono text-xs text-primary font-semibold">
-              Question {currentQuestionIndex + 1} of {totalQuestions}
+    <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8 pb-24">
+      {/* Top Meta Bar */}
+      <div className="flex items-center justify-between border-b border-border pb-4 mb-5">
+        <div className="flex items-center gap-3">
+          <span className="text-sm font-medium text-muted-foreground">
+            Question <span className="text-foreground font-semibold">{safeQuestionIndex + 1}</span> of{' '}
+            <span className="text-foreground font-semibold">{totalQuestions}</span>
+          </span>
+          {user && (
+            <span className="hidden sm:inline-flex items-center gap-1 text-xs text-muted-foreground font-mono">
+              • <Cloud className="w-3 h-3 text-primary" /> Synced
             </span>
-            <span className="text-border text-xs">•</span>
-            <span className="text-xs text-muted-foreground truncate max-w-[220px]">
-              {activeQuiz.title}
-            </span>
-            {user && (
-              <span className="text-[11px] text-muted-foreground/80 flex items-center gap-1 font-mono">
-                • <Cloud className="w-3 h-3 text-primary inline" /> Edge Synced
-              </span>
-            )}
-          </div>
+          )}
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-4">
           {/* Instant Mode Switch */}
-          <div className="flex items-center gap-1.5 bg-muted/30 px-2 py-1 rounded border border-border/60">
-            <Label htmlFor="exam-instant" className="text-[11px] cursor-pointer text-muted-foreground">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <Label htmlFor="exam-instant" className="text-xs cursor-pointer text-muted-foreground">
               Instant Check
             </Label>
             <Switch
               id="exam-instant"
               checked={isInstantMode}
               onCheckedChange={setIsInstantMode}
-              className="scale-75"
+              className="scale-90"
             />
           </div>
 
-          {/* Synchronized Master Clock (Millisecond-accurate across devices) */}
+          {/* Timer: Minimal, no container box, pulsing dot */}
           <div
-            className="flex items-center gap-1 px-2.5 py-1 rounded bg-muted/40 border border-border/60 font-mono text-xs text-foreground font-medium select-none shadow-2xs"
-            title={`Edge-Synchronized Clock (±1ms, Origin: ${originDeviceId || 'Master'})`}
+            className="flex items-center gap-2 font-mono text-sm text-foreground font-medium select-none"
+            title={`Elapsed Time (${clockSkewMs !== undefined ? `Skew: ${clockSkewMs}ms, ` : ''}Origin: ${originDeviceId || 'Master'})`}
           >
-            <Clock className="w-3.5 h-3.5 text-primary shrink-0" />
-            <span>{timeFormatted}</span>
-            <span className="text-[10px] text-primary/70 font-mono">.{msFormatted}</span>
+            <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+            <span>
+              {timeFormatted}
+              <span className="text-xs text-muted-foreground">.{msFormatted}</span>
+            </span>
           </div>
         </div>
       </div>
 
       {/* Progress Bar */}
-      <div className="w-full bg-muted/40 h-1.5 rounded-full overflow-hidden border border-border/40">
+      <div className="h-[2px] bg-border rounded-full mb-8 overflow-hidden">
         <div
-          className="bg-primary h-full transition-all duration-300"
+          className="h-full bg-primary rounded-full transition-all duration-300"
           style={{ width: `${progressPercent}%` }}
         />
       </div>
 
       {/* Question Card */}
-      <div className="rounded-lg border border-border bg-card p-4 sm:p-6 space-y-5 shadow-xs">
-        
-        {/* Question Shelf Tools */}
-        <div className="flex items-center justify-between text-xs text-muted-foreground border-b border-border/50 pb-2.5">
-          <div className="flex items-center gap-2">
-            <Badge variant="outline" className="font-mono text-[10px] py-0 px-1.5">
-              Q{currentQuestionIndex + 1}
-            </Badge>
-          </div>
+      <div className="bg-card border border-border rounded-2xl p-6 sm:p-8 shadow-sm space-y-6">
+        {/* Question Shelf */}
+        <div className="flex items-center justify-between pb-4 border-b border-border">
+          <span className="font-mono text-xs text-primary bg-primary/10 rounded-full px-2.5 py-0.5 font-medium">
+            Question {safeQuestionIndex + 1}
+          </span>
 
-          <div className="flex items-center gap-1.5">
-            {/* Note Button */}
-            <Button
-              variant="ghost"
-              size="sm"
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
               onClick={() => setShowNoteInput(!showNoteInput)}
               className={cn(
-                'h-7 px-2 text-xs gap-1',
-                currentNote ? 'text-primary bg-primary/10' : 'text-muted-foreground'
+                'text-xs flex items-center gap-1.5 transition-colors',
+                currentNote ? 'text-primary font-medium' : 'text-muted-foreground hover:text-foreground'
               )}
               title="Add personal note"
             >
               <FileEdit className="w-3.5 h-3.5" />
               <span>{currentNote ? 'Note Added' : 'Add Note'}</span>
-            </Button>
+            </button>
           </div>
         </div>
 
         {/* Question Text */}
-        <div className="text-sm sm:text-base font-medium text-foreground leading-relaxed">
+        <div className="text-lg font-semibold text-foreground leading-relaxed tracking-tight">
           <MarkdownRenderer content={currentQuestion.question} />
         </div>
 
-        {/* Options List */}
-        <div className="space-y-2 pt-1">
-          {currentQuestion.options.map((option, optIdx) => {
+        {/* Options */}
+        <div className="space-y-2.5 pt-1">
+          {(currentQuestion.options || []).map((option, optIdx) => {
             const isSelected = selectedOptionIndex === optIdx;
             const isCorrectAnswer = optIdx === currentQuestion.correctAnswer;
 
-            // Compute styling
-            let optionStyle = 'border-border/70 hover:bg-muted/40 hover:border-border';
-            let badgeStyle = 'bg-muted text-muted-foreground';
+            let optionWrapperStyle = 'hover:bg-secondary/50 hover:border-border/80 border-border bg-background';
+            let keyBadgeStyle = 'bg-card border-border text-muted-foreground';
 
             if (isInstantMode && isChecked) {
               if (isCorrectAnswer) {
-                optionStyle = 'bg-emerald-500/10 border-emerald-500/50 text-foreground';
-                badgeStyle = 'bg-emerald-500 text-white font-bold';
+                optionWrapperStyle = 'border-green-600/30 bg-green-50 dark:bg-green-950/20';
+                keyBadgeStyle = 'bg-green-600 text-white border-green-600';
               } else if (isSelected) {
-                optionStyle = 'bg-rose-500/10 border-rose-500/50 text-foreground';
-                badgeStyle = 'bg-rose-500 text-white font-bold';
+                optionWrapperStyle = 'border-destructive/30 bg-destructive/5';
+                keyBadgeStyle = 'bg-destructive text-white border-destructive';
               } else {
-                optionStyle = 'opacity-50 border-border/40';
+                optionWrapperStyle = 'border-border/40 opacity-40 bg-background';
               }
             } else if (isSelected) {
-              optionStyle = 'bg-primary/10 border-primary text-primary font-medium shadow-xs';
-              badgeStyle = 'bg-primary text-primary-foreground font-bold';
+              optionWrapperStyle = 'border-primary bg-primary/5 shadow-sm';
+              keyBadgeStyle = 'bg-primary text-primary-foreground border-primary';
             }
 
             return (
@@ -354,29 +355,29 @@ export function QuizView() {
                 key={optIdx}
                 type="button"
                 disabled={isInstantMode && isChecked}
-                onClick={() => selectAnswer(currentQuestionIndex, optIdx)}
+                onClick={() => selectAnswer(safeQuestionIndex, optIdx)}
                 className={cn(
-                  'group w-full text-left p-3 rounded-md border text-xs sm:text-sm flex items-start gap-3 transition-colors',
-                  optionStyle
+                  'w-full border rounded-xl p-4 flex items-center gap-4 cursor-pointer transition-all text-left group',
+                  optionWrapperStyle
                 )}
               >
                 <div
                   className={cn(
-                    'w-6 h-6 rounded flex items-center justify-center shrink-0 font-mono text-xs transition-colors',
-                    badgeStyle
+                    'w-7 h-7 rounded-lg border flex items-center justify-center text-xs font-semibold flex-shrink-0 transition-colors',
+                    keyBadgeStyle
                   )}
                 >
                   {optionLetters[optIdx] || optIdx + 1}
                 </div>
 
-                <div className="flex-1 pt-0.5 leading-snug">
+                <div className="text-sm text-foreground leading-snug flex-1">
                   <MarkdownRenderer content={option} inline />
                 </div>
 
                 {isInstantMode && isChecked && (
-                  <div className="shrink-0 pt-0.5">
-                    {isCorrectAnswer && <CheckCircle2 className="w-4 h-4 text-emerald-500" />}
-                    {isSelected && !isCorrectAnswer && <XCircle className="w-4 h-4 text-rose-500" />}
+                  <div className="flex-shrink-0">
+                    {isCorrectAnswer && <CheckCircle2 className="w-4 h-4 text-green-600" />}
+                    {isSelected && !isCorrectAnswer && <XCircle className="w-4 h-4 text-destructive" />}
                   </div>
                 )}
               </button>
@@ -384,14 +385,14 @@ export function QuizView() {
           })}
         </div>
 
-        {/* Instant Explanation Box */}
+        {/* Explanation Box */}
         {isInstantMode && isChecked && currentQuestion.explanation && (
-          <div className="p-3.5 rounded-md border border-primary/30 bg-primary/5 text-xs text-foreground space-y-1.5 animate-in fade-in">
-            <div className="flex items-center gap-1.5 font-semibold text-primary">
-              <Lightbulb className="w-3.5 h-3.5" />
+          <div className="rounded-xl border border-border bg-secondary/30 p-4 space-y-2 animate-in fade-in">
+            <div className="flex items-center gap-1.5 text-sm font-medium text-foreground">
+              <Lightbulb className="w-4 h-4 text-primary" />
               <span>Explanation</span>
             </div>
-            <div className="leading-relaxed">
+            <div className="text-sm text-muted-foreground leading-relaxed">
               <MarkdownRenderer content={currentQuestion.explanation} />
             </div>
           </div>
@@ -399,29 +400,29 @@ export function QuizView() {
 
         {/* Note Input */}
         {showNoteInput && (
-          <div className="p-3 rounded-md border border-border/70 bg-muted/20 space-y-2">
-            <Label className="text-xs text-muted-foreground font-medium">Question Note</Label>
+          <div className="rounded-xl border border-border bg-background p-4 space-y-2">
+            <Label className="text-xs font-medium text-muted-foreground">Question Note</Label>
             <Textarea
               value={currentNote}
-              onChange={(e) => saveQuestionNote(currentQuestionIndex, e.target.value)}
+              onChange={(e) => saveQuestionNote(safeQuestionIndex, e.target.value)}
               placeholder="Record your thoughts, doubts, or formulas for this question..."
               rows={3}
-              className="text-xs bg-background"
+              className="w-full text-sm bg-transparent outline-none resize-none text-foreground placeholder:text-muted-foreground border-border focus-visible:ring-1 focus-visible:ring-ring"
             />
           </div>
         )}
 
-        {/* Footer Navigation Bar */}
-        <div className="flex items-center justify-between pt-3 border-t border-border/50">
+        {/* Navigation Footer */}
+        <div className="flex items-center justify-between pt-5 border-t border-border">
           <Button
-            variant="outline"
+            variant="ghost"
             size="sm"
-            disabled={currentQuestionIndex === 0}
+            disabled={safeQuestionIndex === 0}
             onClick={prevQuestion}
-            className="h-8 text-xs gap-1 border-border/70"
+            className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors px-3 py-2 h-auto"
             title="Previous Question"
           >
-            <ChevronLeft className="w-3.5 h-3.5" />
+            <ChevronLeft className="w-4 h-4" />
             <span>Previous</span>
           </Button>
 
@@ -429,60 +430,60 @@ export function QuizView() {
             {/* Check Button (Instant Mode) */}
             {isInstantMode && !isChecked && (
               <Button
-                variant="secondary"
+                variant="outline"
                 size="sm"
-                onClick={() => checkAnswer(currentQuestionIndex)}
-                className="h-8 text-xs font-medium gap-1.5"
+                onClick={() => checkAnswer(safeQuestionIndex)}
+                className="border border-border rounded-lg px-4 py-2 text-sm hover:bg-secondary transition-colors h-auto font-normal text-foreground"
                 title="Check Answer"
               >
-                <Check className="w-3.5 h-3.5" />
+                <Check className="w-3.5 h-3.5 mr-1.5" />
                 <span>Check Answer</span>
               </Button>
             )}
 
             {/* Next or Finish Button */}
-            {currentQuestionIndex < totalQuestions - 1 ? (
+            {safeQuestionIndex < totalQuestions - 1 ? (
               <Button
                 size="sm"
                 onClick={nextQuestion}
-                className="h-8 text-xs font-medium gap-1.5 bg-primary text-primary-foreground"
+                className="bg-primary text-primary-foreground rounded-lg px-5 py-2 text-sm font-medium hover:bg-primary/90 h-auto"
                 title="Next Question"
               >
                 <span>Next</span>
-                <ChevronRight className="w-3.5 h-3.5" />
+                <ChevronRight className="w-4 h-4 ml-1.5" />
               </Button>
             ) : (
               <Button
                 size="sm"
                 onClick={finishQuiz}
-                className="h-8 text-xs font-semibold gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white px-4"
+                className="bg-primary text-primary-foreground rounded-lg px-5 py-2 text-sm font-medium hover:bg-primary/90 h-auto"
                 title="Finish Exam"
               >
                 <span>Finish Quiz</span>
-                <Send className="w-3.5 h-3.5" />
+                <Send className="w-3.5 h-3.5 ml-1.5" />
               </Button>
             )}
           </div>
         </div>
       </div>
 
-      {/* Quick Jump Question Grid */}
-      <div className="flex flex-wrap items-center justify-center gap-1.5 pt-1">
+      {/* Question Jump Grid */}
+      <div className="flex flex-wrap justify-center gap-1.5 pt-6">
         {activeQuiz.questions.map((_, idx) => {
           const isAnswered = userAnswers[idx] !== undefined;
-          const isCurrent = idx === currentQuestionIndex;
+          const isCurrent = idx === safeQuestionIndex;
 
           return (
             <button
               key={idx}
               onClick={() => goToQuestion(idx)}
               className={cn(
-                'w-7 h-7 rounded text-xs font-mono transition-colors border flex items-center justify-center',
+                'w-7 h-7 rounded-md text-xs font-mono transition-colors border flex items-center justify-center',
                 isCurrent
-                  ? 'border-primary bg-primary text-primary-foreground font-bold'
+                  ? 'border-primary bg-primary text-primary-foreground font-semibold'
                   : isAnswered
-                  ? 'border-border/80 bg-muted text-foreground'
-                  : 'border-border/40 text-muted-foreground hover:bg-muted/40'
+                  ? 'border-border bg-secondary text-foreground'
+                  : 'border-border text-muted-foreground hover:bg-secondary'
               )}
             >
               {idx + 1}
@@ -491,12 +492,12 @@ export function QuizView() {
         })}
       </div>
 
-      {/* Discreet Bottom Controls / Keyboard Shortcuts Button */}
-      <div className="flex items-center justify-center pt-2">
+      {/* Keyboard Shortcuts Trigger Button */}
+      <div className="flex items-center justify-center pt-4">
         <button
           type="button"
           onClick={() => setShowShortcutsDialog(true)}
-          className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground/70 hover:text-foreground hover:bg-muted/40 px-2.5 py-1 rounded transition-colors"
+          className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors px-2.5 py-1 rounded-md"
           title="View Keyboard Shortcuts"
         >
           <Keyboard className="w-3.5 h-3.5" />
@@ -506,34 +507,37 @@ export function QuizView() {
 
       {/* Keyboard Shortcuts Dialog */}
       <Dialog open={showShortcutsDialog} onOpenChange={setShowShortcutsDialog}>
-        <DialogContent className="w-[calc(100vw-2rem)] max-w-xs bg-card border-border text-foreground p-5 rounded-xl shadow-2xl">
-          <DialogHeader className="pb-2 border-b border-border/80">
-            <DialogTitle className="text-sm font-bold flex items-center gap-2">
+        <DialogContent className="max-w-xs bg-card border-border rounded-2xl p-5 shadow-xl">
+          <DialogHeader className="pb-3 border-b border-border">
+            <DialogTitle className="text-sm font-semibold flex items-center gap-2 text-foreground">
               <Keyboard className="w-4 h-4 text-primary" />
               <span>Keyboard Controls</span>
             </DialogTitle>
           </DialogHeader>
-          <div className="space-y-2.5 py-2 text-xs">
-            <div className="flex items-center justify-between">
-              <span className="text-muted-foreground">Select Option:</span>
-              <span className="font-mono bg-muted/80 px-2 py-0.5 rounded border border-border/60 text-foreground font-semibold">1 – 9</span>
+          <div className="space-y-3 py-2 text-sm">
+            <div className="flex justify-between items-center text-sm">
+              <span className="text-muted-foreground">Select Option</span>
+              <span className="font-mono bg-secondary px-2 py-0.5 rounded text-xs text-foreground">1 – 9 / A – D</span>
             </div>
-            <div className="flex items-center justify-between">
-              <span className="text-muted-foreground">Next / Finish:</span>
-              <span className="font-mono bg-muted/80 px-2 py-0.5 rounded border border-border/60 text-foreground font-semibold">Enter / Space</span>
+            <div className="flex justify-between items-center text-sm">
+              <span className="text-muted-foreground">Next / Finish</span>
+              <span className="font-mono bg-secondary px-2 py-0.5 rounded text-xs text-foreground">Enter / Space</span>
             </div>
-            <div className="flex items-center justify-between">
-              <span className="text-muted-foreground">Previous:</span>
-              <span className="font-mono bg-muted/80 px-2 py-0.5 rounded border border-border/60 text-foreground font-semibold">← Left Arrow</span>
+            <div className="flex justify-between items-center text-sm">
+              <span className="text-muted-foreground">Previous Question</span>
+              <span className="font-mono bg-secondary px-2 py-0.5 rounded text-xs text-foreground">← Left</span>
             </div>
-            <div className="flex items-center justify-between">
-              <span className="text-muted-foreground">Next:</span>
-              <span className="font-mono bg-muted/80 px-2 py-0.5 rounded border border-border/60 text-foreground font-semibold">→ Right Arrow</span>
+            <div className="flex justify-between items-center text-sm">
+              <span className="text-muted-foreground">Next Question</span>
+              <span className="font-mono bg-secondary px-2 py-0.5 rounded text-xs text-foreground">→ Right</span>
+            </div>
+            <div className="flex justify-between items-center text-sm">
+              <span className="text-muted-foreground">Cycle Options</span>
+              <span className="font-mono bg-secondary px-2 py-0.5 rounded text-xs text-foreground">↑ / ↓</span>
             </div>
           </div>
         </DialogContent>
       </Dialog>
-
     </div>
   );
 }

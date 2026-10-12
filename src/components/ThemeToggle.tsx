@@ -3,25 +3,26 @@
 import React from 'react';
 import { Moon, Sun } from 'lucide-react';
 import { useQuiz } from '@/context/QuizProvider';
-import { Button } from '@/components/ui/button';
 
 export function ThemeToggle() {
   const { theme, toggleTheme } = useQuiz();
 
   return (
-    <Button
-      variant="ghost"
-      size="icon"
+    <button
+      type="button"
       onClick={toggleTheme}
-      className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors"
+      className="p-1.5 rounded-md hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
       title={`Switch to ${theme === 'dark' ? 'Light' : 'Dark'} mode`}
+      aria-label="Toggle theme"
     >
       {theme === 'dark' ? (
-        <Sun className="h-4 w-4 text-amber-400" />
+        <Sun className="w-4 h-4 text-amber-500/80" />
       ) : (
-        <Moon className="h-4 w-4 text-slate-700" />
+        <Moon className="w-4 h-4 text-stone-500" />
       )}
       <span className="sr-only">Toggle theme</span>
-    </Button>
+    </button>
   );
 }
+
+export default ThemeToggle;

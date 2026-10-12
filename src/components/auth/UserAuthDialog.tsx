@@ -11,7 +11,6 @@ import {
 } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
@@ -296,12 +295,11 @@ export function UserAuthDialog({ open, onOpenChange, defaultTab = 'auth' }: User
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[calc(100vw-1.5rem)] max-w-md sm:max-w-lg max-h-[90vh] bg-card border-border text-foreground p-0 rounded-xl shadow-2xl flex flex-col overflow-hidden my-auto">
-        
-        {/* Header - Fixed with right padding to clear close button */}
-        <DialogHeader className="px-4 sm:px-5 pt-4 pb-3 pr-12 border-b border-border/60 bg-muted/20 shrink-0">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shrink-0">
+      <DialogContent className="w-[calc(100vw-2rem)] max-w-md max-h-[90vh] bg-card border border-border rounded-2xl shadow-xl text-foreground p-0 flex flex-col overflow-hidden my-auto">
+        {/* Header */}
+        <DialogHeader className="px-6 pt-6 pb-4 border-b border-border shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-xl bg-secondary flex items-center justify-center text-muted-foreground shrink-0">
               {activeTab === 'settings' ? (
                 <Settings className="w-4 h-4" />
               ) : activeTab === 'mcp' ? (
@@ -311,10 +309,10 @@ export function UserAuthDialog({ open, onOpenChange, defaultTab = 'auth' }: User
               )}
             </div>
             <div className="min-w-0">
-              <DialogTitle className="text-sm sm:text-base font-semibold tracking-tight truncate">
+              <DialogTitle className="text-base font-semibold text-foreground tracking-tight truncate">
                 {user ? (activeTab === 'mcp' ? 'AI MCP Assistant Integration' : 'Account & Settings') : 'Sign In & Settings'}
               </DialogTitle>
-              <DialogDescription className="text-[11px] sm:text-xs text-muted-foreground truncate">
+              <DialogDescription className="text-sm text-muted-foreground mt-0.5 truncate">
                 {activeTab === 'settings'
                   ? 'Configure personal API keys & cloud sync'
                   : activeTab === 'mcp'
@@ -325,56 +323,76 @@ export function UserAuthDialog({ open, onOpenChange, defaultTab = 'auth' }: User
           </div>
         </DialogHeader>
 
-        {/* Tab Controls - Fixed under header */}
-        <div className="px-4 sm:px-5 pt-3 pb-1 shrink-0">
-          <Tabs value={activeTab} onValueChange={(val: any) => setActiveTab(val)} className="w-full">
-            <TabsList className="grid grid-cols-4 bg-muted/40 p-1 text-xs rounded-lg">
-              <TabsTrigger value="auth" className="gap-1 text-[11px] sm:text-xs py-1.5 px-1 truncate">
+        {/* Unified Tab Component */}
+        <Tabs value={activeTab} onValueChange={(val: any) => setActiveTab(val)} className="w-full flex-1 flex flex-col min-h-0">
+          {/* Tab Navigation - Underline style, no background pills */}
+          <div className="shrink-0 bg-card">
+            <TabsList className="w-full flex h-auto p-0 bg-transparent border-b border-border rounded-none justify-start">
+              <TabsTrigger
+                value="auth"
+                className="flex-1 py-2.5 text-sm font-medium text-muted-foreground border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:text-primary data-[state=active]:bg-transparent hover:text-foreground rounded-none shadow-none transition-colors gap-1.5"
+              >
                 <User className="w-3.5 h-3.5 shrink-0" />
                 <span className="truncate">{user ? 'Account' : 'Sign In'}</span>
               </TabsTrigger>
-              <TabsTrigger value="mcp" className="gap-1 text-[11px] sm:text-xs py-1.5 px-1 truncate">
-                <Bot className="w-3.5 h-3.5 shrink-0 text-primary" />
+              <TabsTrigger
+                value="mcp"
+                className="flex-1 py-2.5 text-sm font-medium text-muted-foreground border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:text-primary data-[state=active]:bg-transparent hover:text-foreground rounded-none shadow-none transition-colors gap-1.5"
+              >
+                <Bot className="w-3.5 h-3.5 shrink-0" />
                 <span className="truncate">AI MCP</span>
               </TabsTrigger>
-              <TabsTrigger value="settings" className="gap-1 text-[11px] sm:text-xs py-1.5 px-1 truncate">
+              <TabsTrigger
+                value="settings"
+                className="flex-1 py-2.5 text-sm font-medium text-muted-foreground border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:text-primary data-[state=active]:bg-transparent hover:text-foreground rounded-none shadow-none transition-colors gap-1.5"
+              >
                 <Settings className="w-3.5 h-3.5 shrink-0" />
                 <span className="truncate">Settings</span>
               </TabsTrigger>
-              <TabsTrigger value="sessions" className="gap-1 text-[11px] sm:text-xs py-1.5 px-1 truncate" disabled={!user}>
+              <TabsTrigger
+                value="sessions"
+                disabled={!user}
+                className="flex-1 py-2.5 text-sm font-medium text-muted-foreground border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:text-primary data-[state=active]:bg-transparent hover:text-foreground rounded-none shadow-none transition-colors gap-1.5 disabled:opacity-40"
+              >
                 <History className="w-3.5 h-3.5 shrink-0" />
                 <span className="truncate">Devices</span>
               </TabsTrigger>
             </TabsList>
-          </Tabs>
-        </div>
+          </div>
 
-        {/* Scrollable Tab Content Container */}
-        <div className="overflow-y-auto overscroll-contain flex-1 px-4 sm:px-5 py-3 space-y-4">
-          <Tabs value={activeTab} onValueChange={(val: any) => setActiveTab(val)} className="w-full">
+          {/* Scrollable Tab Content Container */}
+          <div className="overflow-y-auto overscroll-contain flex-1 px-6 py-5 space-y-4">
             {/* TAB 1: AUTHENTICATION / ACCOUNT */}
             <TabsContent value="auth" className="space-y-4 focus-visible:outline-none m-0">
               {!user ? (
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between border-b border-border/40 pb-2">
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between pb-3 border-b border-border">
                     <span className="text-xs font-medium text-muted-foreground">
                       {authMode === 'login' ? 'Existing Account' : 'Create Free Account'}
                     </span>
-                    <div className="flex gap-1">
+                    <div className="flex items-center gap-1.5">
                       <Button
                         type="button"
-                        variant={authMode === 'login' ? 'secondary' : 'ghost'}
+                        variant="ghost"
                         size="sm"
-                        className="h-7 text-xs px-2.5"
+                        className={`px-3 py-1 text-xs rounded-lg transition-colors ${
+                          authMode === 'login'
+                            ? 'text-primary font-medium bg-secondary'
+                            : 'text-muted-foreground hover:text-foreground'
+                        }`}
                         onClick={() => setAuthMode('login')}
                       >
                         Sign In
                       </Button>
                       <Button
                         type="button"
-                        variant={authMode === 'register' ? 'secondary' : 'ghost'}
+                        variant="ghost"
                         size="sm"
-                        className="h-7 text-xs px-2.5"
+                        className={`px-3 py-1 text-xs rounded-lg transition-colors ${
+                          authMode === 'register'
+                            ? 'text-primary font-medium bg-secondary'
+                            : 'text-muted-foreground hover:text-foreground'
+                        }`}
                         onClick={() => setAuthMode('register')}
                       >
                         Register
@@ -382,60 +400,59 @@ export function UserAuthDialog({ open, onOpenChange, defaultTab = 'auth' }: User
                     </div>
                   </div>
 
-                  <form onSubmit={handleAuthSubmit} className="space-y-3">
-                    <div className="space-y-1">
-                      <Label className="text-xs font-medium">Username</Label>
-                      <Input
+                  <form onSubmit={handleAuthSubmit} className="space-y-3.5">
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-medium text-foreground">Username</Label>
+                      <input
                         type="text"
                         placeholder="e.g. alex_learner"
                         value={username}
                         onChange={(e) => setUsername(e.target.value)}
                         required
-                        className="h-9 sm:h-8 text-xs bg-background"
+                        className="bg-background border border-border rounded-xl px-3 py-2.5 text-sm w-full outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/20 text-foreground"
                       />
                     </div>
 
                     {authMode === 'register' && (
-                      <div className="space-y-1">
-                        <Label className="text-xs font-medium">Display Name (Optional)</Label>
-                        <Input
+                      <div className="space-y-1.5">
+                        <Label className="text-xs font-medium text-foreground">Display Name (Optional)</Label>
+                        <input
                           type="text"
                           placeholder="e.g. Alex"
                           value={displayName}
                           onChange={(e) => setDisplayName(e.target.value)}
-                          className="h-9 sm:h-8 text-xs bg-background"
+                          className="bg-background border border-border rounded-xl px-3 py-2.5 text-sm w-full outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/20 text-foreground"
                         />
                       </div>
                     )}
 
-                    <div className="space-y-1">
-                      <Label className="text-xs font-medium">Password</Label>
-                      <Input
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-medium text-foreground">Password</Label>
+                      <input
                         type="password"
                         placeholder="••••••••"
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                         required
-                        className="h-9 sm:h-8 text-xs bg-background"
+                        className="bg-background border border-border rounded-xl px-3 py-2.5 text-sm w-full outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/20 text-foreground"
                       />
                     </div>
 
-                    <div className="pt-2 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                      <span className="text-[11px] text-muted-foreground">
+                    <div className="pt-2 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                      <span className="text-xs text-muted-foreground">
                         Syncs quizzes seamlessly across devices.
                       </span>
                       <Button
                         type="submit"
-                        size="sm"
                         disabled={isAuthLoading}
-                        className="h-8 text-xs px-4 bg-primary text-primary-foreground font-medium shrink-0"
+                        className="bg-primary text-primary-foreground rounded-xl px-4 py-2 text-sm font-medium hover:bg-primary/90 shrink-0 gap-1.5"
                       >
                         {isAuthLoading ? (
-                          <RefreshCw className="w-3.5 h-3.5 animate-spin mr-1.5" />
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
                         ) : (
-                          <KeyRound className="w-3.5 h-3.5 mr-1.5" />
+                          <KeyRound className="w-3.5 h-3.5" />
                         )}
-                        {authMode === 'login' ? 'Sign In' : 'Create Account'}
+                        <span>{authMode === 'login' ? 'Sign In' : 'Create Account'}</span>
                       </Button>
                     </div>
                   </form>
@@ -443,33 +460,35 @@ export function UserAuthDialog({ open, onOpenChange, defaultTab = 'auth' }: User
               ) : (
                 <div className="space-y-4">
                   {/* Logged in User Profile Card */}
-                  <div className="p-3.5 rounded-lg border border-border/80 bg-muted/20 space-y-3">
+                  <div className="bg-secondary/50 rounded-2xl p-4 space-y-3 border border-border">
                     <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2.5">
-                        <div className="w-9 h-9 rounded-full bg-primary/15 border border-primary/30 flex items-center justify-center font-mono font-bold text-primary text-sm">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-primary/10 border border-primary/20 text-primary font-bold text-sm flex items-center justify-center font-mono">
                           {user.displayName.substring(0, 2).toUpperCase()}
                         </div>
                         <div>
-                          <div className="text-sm font-semibold flex items-center gap-1.5">
+                          <div className="text-sm font-semibold text-foreground">
                             {user.displayName}
                           </div>
-                          <div className="text-xs text-muted-foreground font-mono">@{user.username}</div>
+                          <div className="text-xs text-muted-foreground font-mono">
+                            @{user.username}
+                          </div>
                         </div>
                       </div>
-                      <Badge className="bg-emerald-500/10 text-emerald-500 border-emerald-500/20 text-xs">
+                      <span className="text-xs text-primary bg-primary/10 rounded-full px-2 py-0.5 font-medium">
                         Connected
-                      </Badge>
+                      </span>
                     </div>
 
                     {/* Records Summary */}
                     <div className="grid grid-cols-2 gap-2 text-xs pt-1">
-                      <div className="p-2 rounded bg-background/50 border border-border/40">
+                      <div className="p-3 rounded-xl bg-background border border-border">
                         <div className="text-muted-foreground text-[11px]">Saved Quizzes</div>
-                        <div className="font-semibold text-sm font-mono mt-0.5">{savedQuizzes.length} saved</div>
+                        <div className="font-semibold text-sm font-mono mt-0.5 text-foreground">{savedQuizzes.length} saved</div>
                       </div>
-                      <div className="p-2 rounded bg-background/50 border border-border/40">
+                      <div className="p-3 rounded-xl bg-background border border-border">
                         <div className="text-muted-foreground text-[11px]">Quiz Attempts</div>
-                        <div className="font-semibold text-sm font-mono mt-0.5">{history.length} completed</div>
+                        <div className="font-semibold text-sm font-mono mt-0.5 text-foreground">{history.length} completed</div>
                       </div>
                     </div>
                   </div>
@@ -481,7 +500,7 @@ export function UserAuthDialog({ open, onOpenChange, defaultTab = 'auth' }: User
                       size="sm"
                       disabled={isSyncing}
                       onClick={() => syncLibraryWithCloud(false)}
-                      className="h-8 text-xs gap-1.5 border-border/80"
+                      className="border border-border rounded-xl px-4 py-2 text-sm text-muted-foreground hover:bg-secondary hover:text-foreground gap-1.5"
                     >
                       <RefreshCw className={`w-3.5 h-3.5 text-primary ${isSyncing ? 'animate-spin' : ''}`} />
                       <span>{isSyncing ? 'Syncing...' : 'Sync Cloud Now'}</span>
@@ -490,53 +509,57 @@ export function UserAuthDialog({ open, onOpenChange, defaultTab = 'auth' }: User
                       variant="ghost"
                       size="sm"
                       onClick={logout}
-                      className="h-8 text-xs text-rose-500 hover:text-rose-600 hover:bg-rose-500/10 gap-1.5"
+                      className="text-destructive hover:text-destructive/80 text-sm gap-1.5"
                     >
                       <LogOut className="w-3.5 h-3.5" />
-                      Sign Out
+                      <span>Sign Out</span>
                     </Button>
                   </div>
                 </div>
               )}
             </TabsContent>
 
-            {/* TAB: AI MCP INTEGRATION (ZERO-PASSWORD AUTH) */}
-            <TabsContent value="mcp" className="space-y-3 focus-visible:outline-none m-0">
+            {/* TAB 2: AI MCP INTEGRATION (ZERO-PASSWORD AUTH) */}
+            <TabsContent value="mcp" className="space-y-4 focus-visible:outline-none m-0">
               {!user ? (
-                <div className="py-8 text-center space-y-2 border border-dashed border-border/80 rounded-lg p-4">
-                  <Bot className="w-8 h-8 mx-auto text-muted-foreground opacity-60" />
-                  <div className="text-xs font-semibold">Sign In to Access Your MCP URL</div>
-                  <p className="text-[11px] text-muted-foreground max-w-xs mx-auto leading-relaxed">
+                <div className="py-8 text-center space-y-3 border border-dashed border-border rounded-2xl p-6 bg-secondary/30">
+                  <Bot className="w-8 h-8 mx-auto text-muted-foreground" />
+                  <div className="text-sm font-semibold text-foreground">Sign In to Access Your MCP URL</div>
+                  <p className="text-xs text-muted-foreground max-w-xs mx-auto leading-relaxed">
                     Sign in with your account to get your personalized zero-password MCP endpoint for Cursor, Claude Desktop, and Windsurf.
                   </p>
-                  <Button size="sm" className="h-7 text-xs mt-2" onClick={() => setActiveTab('auth')}>
+                  <Button
+                    size="sm"
+                    className="bg-primary text-primary-foreground rounded-xl px-4 py-2 text-sm font-medium hover:bg-primary/90 mt-2"
+                    onClick={() => setActiveTab('auth')}
+                  >
                     Go to Sign In
                   </Button>
                 </div>
               ) : (
-                <div className="space-y-3">
+                <div className="space-y-4">
                   {/* Overview Card */}
-                  <div className="p-3 rounded-lg border border-primary/20 bg-primary/5 text-xs space-y-1.5">
+                  <div className="bg-secondary/50 rounded-2xl p-4 space-y-2 border border-border">
                     <div className="flex items-center justify-between">
                       <span className="font-semibold text-primary flex items-center gap-1.5 text-xs">
                         <Bot className="w-4 h-4" />
                         Zero-Password AI Authentication
                       </span>
-                      <Badge variant="outline" className="bg-emerald-500/10 text-emerald-500 border-emerald-500/20 text-[10px] py-0">
+                      <span className="text-xs text-primary bg-primary/10 rounded-full px-2 py-0.5 font-medium">
                         Connected
-                      </Badge>
+                      </span>
                     </div>
-                    <p className="text-[11px] text-muted-foreground leading-relaxed">
+                    <p className="text-xs text-muted-foreground leading-relaxed">
                       Connect your AI assistant (Cursor, Windsurf, Claude Desktop, Antigravity) with zero passwords. Quizzes generated by your AI automatically sync directly into your personal MCQHub library across all your devices.
                     </p>
                   </div>
 
                   {/* Secret Personal Endpoint Box */}
-                  <div className="space-y-1.5">
-                    <div className="flex items-center justify-between">
-                      <Label className="text-xs font-medium flex items-center gap-1">
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between text-xs">
+                      <Label className="font-medium text-foreground flex items-center gap-1">
                         <KeyRound className="w-3.5 h-3.5 text-primary" />
-                        Your Private MCP Endpoint
+                        <span>Your Private MCP Endpoint</span>
                       </Label>
                       <Button
                         type="button"
@@ -544,22 +567,23 @@ export function UserAuthDialog({ open, onOpenChange, defaultTab = 'auth' }: User
                         size="sm"
                         disabled={isRotatingMcp || isLoadingMcp}
                         onClick={handleRotateMcpToken}
-                        className="h-6 text-[10px] px-2 text-muted-foreground hover:text-foreground gap-1"
+                        className="text-muted-foreground hover:text-foreground text-xs h-auto p-0 gap-1"
                       >
                         <RefreshCw className={`w-3 h-3 ${isRotatingMcp ? 'animate-spin text-primary' : ''}`} />
-                        Regenerate Secret Link
+                        <span>Regenerate Link</span>
                       </Button>
                     </div>
 
-                    <div className="flex items-center gap-1.5">
-                      <Input
+                    <div className="flex items-center gap-2">
+                      <input
                         readOnly
                         value={isLoadingMcp ? 'Loading secret URL...' : (mcpUrl || '')}
-                        className="h-8 text-[11px] font-mono bg-background text-muted-foreground select-all"
+                        className="bg-background border border-border rounded-xl px-3 py-2 text-xs font-mono w-full outline-none text-muted-foreground select-all"
                       />
                       <Button
                         type="button"
                         size="sm"
+                        variant="outline"
                         disabled={!mcpUrl || isLoadingMcp}
                         onClick={() => {
                           if (mcpUrl) {
@@ -569,38 +593,40 @@ export function UserAuthDialog({ open, onOpenChange, defaultTab = 'auth' }: User
                             addToast('Personal MCP endpoint copied to clipboard!', 'success');
                           }
                         }}
-                        className="h-8 px-2.5 shrink-0 text-xs gap-1"
+                        className="border border-border rounded-xl px-3 py-2 text-xs text-muted-foreground hover:bg-secondary hover:text-foreground shrink-0 gap-1"
                       >
-                        {copiedMcpUrl ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                        {copiedMcpUrl ? <Check className="w-3.5 h-3.5 text-primary" /> : <Copy className="w-3.5 h-3.5" />}
                         <span>{copiedMcpUrl ? 'Copied' : 'Copy'}</span>
                       </Button>
                     </div>
                   </div>
 
                   {/* Client Setup Snippets */}
-                  <div className="space-y-1.5 pt-1">
-                    <div className="flex items-center justify-between">
-                      <Label className="text-xs font-medium">Quick Setup Snippet</Label>
-                      <div className="flex gap-1">
+                  <div className="space-y-2 pt-1">
+                    <div className="flex items-center justify-between text-xs">
+                      <Label className="font-medium text-foreground">Quick Setup Snippet</Label>
+                      <div className="flex items-center gap-1 bg-secondary rounded-lg p-0.5">
                         {(['cursor', 'claude', 'windsurf'] as const).map((client) => (
-                          <Button
+                          <button
                             key={client}
                             type="button"
-                            variant={selectedClient === client ? 'secondary' : 'ghost'}
-                            size="sm"
-                            className="h-6 text-[10px] px-2 capitalize"
+                            className={`px-2 py-0.5 text-xs rounded-md capitalize transition-colors ${
+                              selectedClient === client
+                                ? 'bg-card text-foreground font-medium shadow-sm'
+                                : 'text-muted-foreground hover:text-foreground'
+                            }`}
                             onClick={() => setSelectedClient(client)}
                           >
                             {client === 'claude' ? 'Claude' : client === 'cursor' ? 'Cursor' : 'Windsurf'}
-                          </Button>
+                          </button>
                         ))}
                       </div>
                     </div>
 
-                    <div className="relative rounded-md bg-muted/40 border border-border/60 p-2 text-[10px] font-mono text-muted-foreground overflow-x-auto">
+                    <div className="relative rounded-xl bg-secondary/50 border border-border p-3 text-xs font-mono text-muted-foreground overflow-x-auto">
                       <Button
                         type="button"
-                        variant="ghost"
+                        variant="outline"
                         size="sm"
                         onClick={() => {
                           const snippet = getClientConfigSnippet(selectedClient, mcpUrl || '');
@@ -609,23 +635,23 @@ export function UserAuthDialog({ open, onOpenChange, defaultTab = 'auth' }: User
                           setTimeout(() => setCopiedSnippet(false), 2000);
                           addToast(`Copied ${selectedClient} configuration snippet!`, 'success');
                         }}
-                        className="absolute top-1.5 right-1.5 h-6 px-2 text-[10px] gap-1 bg-background/80 hover:bg-background border border-border/40"
+                        className="absolute top-2 right-2 border border-border rounded-lg px-2 py-1 text-xs text-muted-foreground hover:bg-background hover:text-foreground gap-1 bg-card/80"
                       >
-                        {copiedSnippet ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
-                        {copiedSnippet ? 'Copied' : 'Copy Config'}
+                        {copiedSnippet ? <Check className="w-3 h-3 text-primary" /> : <Copy className="w-3 h-3" />}
+                        <span>{copiedSnippet ? 'Copied' : 'Copy'}</span>
                       </Button>
-                      <pre className="pr-16 leading-relaxed">
+                      <pre className="pr-16 leading-relaxed text-[11px]">
                         {getClientConfigSnippet(selectedClient, mcpUrl || 'https://mcqhub.adsbackend01.workers.dev/YOUR_SECRET_TOKEN/mcp')}
                       </pre>
                     </div>
                   </div>
 
                   {/* Open / Guest Endpoint Note */}
-                  <div className="p-2.5 rounded bg-muted/20 border border-border/40 text-[10px] text-muted-foreground flex items-start gap-2">
-                    <Globe className="w-3.5 h-3.5 text-muted-foreground shrink-0 mt-0.5" />
+                  <div className="bg-secondary/50 rounded-xl p-3 text-xs text-muted-foreground border border-border flex items-start gap-2.5">
+                    <Globe className="w-4 h-4 text-muted-foreground shrink-0 mt-0.5" />
                     <div className="leading-relaxed">
-                      <span className="font-semibold text-foreground">Open / Guest Endpoint: </span>
-                      The public URL <code className="bg-background px-1 py-0.5 rounded text-[9px]">https://mcqhub.adsbackend01.workers.dev/api/mcp</code> is always available for unauthenticated guest tests and general AI evaluation.
+                      <strong className="text-foreground">Open / Guest Endpoint: </strong>
+                      The public URL <code className="bg-background px-1.5 py-0.5 rounded text-[11px] font-mono border border-border">https://mcqhub.adsbackend01.workers.dev/api/mcp</code> is always available for unauthenticated guest tests.
                     </div>
                   </div>
                 </div>
@@ -634,21 +660,21 @@ export function UserAuthDialog({ open, onOpenChange, defaultTab = 'auth' }: User
 
             {/* TAB 3: SETTINGS (API KEY & PREFERENCES) */}
             <TabsContent value="settings" className="space-y-4 focus-visible:outline-none m-0">
-              <div className="p-3.5 rounded-lg border border-border/80 bg-muted/20 space-y-3">
+              <div className="bg-secondary/50 rounded-2xl p-4 space-y-4 border border-border">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <Sparkles className="w-4 h-4 text-primary" />
-                    <span className="text-xs font-semibold text-foreground">AI Generation Settings</span>
+                    <span className="text-sm font-semibold text-foreground">AI Generation Settings</span>
                   </div>
                   {savedApiKey ? (
-                    <Badge variant="outline" className="text-[11px] text-emerald-500 border-emerald-500/30 gap-1">
+                    <span className="text-xs text-primary bg-primary/10 rounded-full px-2 py-0.5 font-medium flex items-center gap-1">
                       <CheckCircle2 className="w-3 h-3" />
                       Custom Key Active
-                    </Badge>
+                    </span>
                   ) : (
-                    <Badge variant="outline" className="text-[11px] text-muted-foreground border-border">
+                    <span className="text-xs text-muted-foreground bg-secondary rounded-full px-2 py-0.5 font-medium border border-border">
                       Default Engine
-                    </Badge>
+                    </span>
                   )}
                 </div>
 
@@ -656,86 +682,84 @@ export function UserAuthDialog({ open, onOpenChange, defaultTab = 'auth' }: User
                   MCQHub includes free built-in generation. If you prefer using your personal Google Gemini API key with higher limits, add it below:
                 </p>
 
-                <div className="space-y-1.5 pt-1">
-                  <div className="flex items-center justify-between">
-                    <Label className="text-xs font-medium">Google Gemini API Key</Label>
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between text-xs">
+                    <Label className="font-medium text-foreground">Google Gemini API Key</Label>
                     <a
                       href="https://aistudio.google.com/apikey"
                       target="_blank"
                       rel="noreferrer"
-                      className="text-[11px] text-primary hover:underline inline-flex items-center gap-1"
+                      className="text-xs text-primary hover:underline inline-flex items-center gap-1"
                     >
                       <span>Get free key from Google AI Studio</span>
                       <ExternalLink className="w-3 h-3" />
                     </a>
                   </div>
                   <div className="relative">
-                    <Input
+                    <input
                       type={showApiKey ? 'text' : 'password'}
                       placeholder="Enter your Gemini API key..."
                       value={apiKeyInput}
                       onChange={(e) => setApiKeyInput(e.target.value)}
-                      className="h-9 sm:h-8 text-xs font-mono pr-8 bg-background"
+                      className="bg-background border border-border rounded-xl px-3 py-2.5 text-xs font-mono w-full outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/20 text-foreground pr-9"
                     />
                     <button
                       type="button"
                       onClick={() => setShowApiKey(!showApiKey)}
-                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                     >
                       {showApiKey ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                     </button>
                   </div>
                 </div>
 
-                {/* Account Sync Toggle (OFF by default) */}
-                <div className="pt-2 border-t border-border/50 space-y-2.5">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="space-y-0.5">
-                      <Label htmlFor="sync-ai-toggle" className="text-xs font-medium cursor-pointer text-foreground">
-                        Sync AI generation setting and token to your account
-                      </Label>
-                      <p className="text-[11px] text-muted-foreground leading-snug">
-                        Use the same API token across all your devices (mobile, laptop, and tablet). Tokens are strictly encrypted before cloud storage.
-                      </p>
-                    </div>
-                    <Switch
-                      id="sync-ai-toggle"
-                      checked={syncToAccount}
-                      onCheckedChange={handleToggleSync}
-                      disabled={!user}
-                      className="shrink-0"
-                    />
+                {/* Account Sync Toggle Row */}
+                <div className="flex items-center justify-between py-3 border-t border-b border-border gap-3">
+                  <div className="space-y-0.5">
+                    <Label htmlFor="sync-ai-toggle" className="text-xs font-medium cursor-pointer text-foreground block">
+                      Sync AI settings and token to account
+                    </Label>
+                    <p className="text-[11px] text-muted-foreground leading-snug">
+                      Use the same API token across all your devices. Tokens are encrypted before cloud storage.
+                    </p>
                   </div>
-
-                  {/* Conditional Privacy & Storage Status Notice */}
-                  {!syncToAccount ? (
-                    <div className="flex items-center gap-2 p-2 rounded-md bg-muted/40 border border-border/60 text-[11px] text-muted-foreground">
-                      <ShieldCheck className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                      <span>Your token is stored in your browser local storage and not on our server.</span>
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-2 p-2 rounded-md bg-primary/10 border border-primary/20 text-[11px] text-primary">
-                      <Lock className="w-3.5 h-3.5 shrink-0" />
-                      <span>End-to-end encrypted (AES-256-GCM). Synced across all your authorized devices.</span>
-                    </div>
-                  )}
+                  <Switch
+                    id="sync-ai-toggle"
+                    checked={syncToAccount}
+                    onCheckedChange={handleToggleSync}
+                    disabled={!user}
+                    className="shrink-0 data-[state=checked]:bg-primary"
+                  />
                 </div>
 
+                {/* Info Box */}
+                {!syncToAccount ? (
+                  <div className="bg-secondary/50 rounded-xl p-3 text-xs text-muted-foreground border border-border flex items-center gap-2">
+                    <ShieldCheck className="w-4 h-4 text-primary shrink-0" />
+                    <span>Your token is stored in your browser local storage and not on our server.</span>
+                  </div>
+                ) : (
+                  <div className="bg-secondary/50 rounded-xl p-3 text-xs text-primary border border-primary/20 flex items-center gap-2">
+                    <Lock className="w-4 h-4 shrink-0" />
+                    <span>End-to-end encrypted (AES-256-GCM). Synced across all your authorized devices.</span>
+                  </div>
+                )}
+
                 {/* Actions Row */}
-                <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-border/50">
+                <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
                   <div className="flex items-center gap-1.5">
                     {user && hasCloudSyncedKey && (
                       <Button
                         type="button"
-                        variant="outline"
+                        variant="ghost"
                         size="sm"
                         disabled={isDeletingCloudToken}
                         onClick={handleDeleteCloudToken}
-                        className="h-7 text-xs text-rose-500 hover:text-rose-600 hover:bg-rose-500/10 border-rose-500/30 px-2 gap-1"
+                        className="text-destructive hover:text-destructive/80 text-xs px-2 gap-1 h-auto py-1"
                         title="Permanently remove your encrypted token from the cloud database"
                       >
                         <Trash2 className="w-3 h-3" />
-                        <span>{isDeletingCloudToken ? 'Deleting...' : 'Delete from Cloud Database'}</span>
+                        <span>{isDeletingCloudToken ? 'Deleting...' : 'Delete from Cloud'}</span>
                       </Button>
                     )}
                   </div>
@@ -747,7 +771,7 @@ export function UserAuthDialog({ open, onOpenChange, defaultTab = 'auth' }: User
                         variant="ghost"
                         size="sm"
                         onClick={handleClearApiKey}
-                        className="h-7 text-xs text-muted-foreground hover:text-foreground px-2 gap-1"
+                        className="text-muted-foreground hover:text-foreground text-xs px-2 py-1 h-auto"
                       >
                         Clear Local
                       </Button>
@@ -757,7 +781,7 @@ export function UserAuthDialog({ open, onOpenChange, defaultTab = 'auth' }: User
                       size="sm"
                       disabled={isSavingKey}
                       onClick={handleSaveApiKey}
-                      className="h-7 text-xs px-3 bg-primary text-primary-foreground font-medium"
+                      className="bg-primary text-primary-foreground rounded-xl px-4 py-2 text-xs font-medium hover:bg-primary/90"
                     >
                       {isSavingKey ? 'Saving...' : 'Save Key'}
                     </Button>
@@ -766,17 +790,17 @@ export function UserAuthDialog({ open, onOpenChange, defaultTab = 'auth' }: User
               </div>
 
               {/* Informational Security & Handling Note */}
-              <div className="p-3.5 rounded-lg border border-border/80 bg-muted/20 space-y-2 text-xs">
-                <div className="flex items-center gap-1.5 font-semibold text-foreground">
-                  <ShieldCheck className="w-4 h-4 text-emerald-500" />
+              <div className="bg-secondary/50 rounded-xl p-3.5 text-xs text-muted-foreground border border-border space-y-2">
+                <div className="flex items-center gap-1.5 font-medium text-foreground">
+                  <ShieldCheck className="w-4 h-4 text-primary" />
                   <span>How custom AI tokens are handled</span>
                 </div>
-                <div className="space-y-1.5 text-[11px] text-muted-foreground leading-relaxed">
+                <div className="space-y-1.5 text-[11px] leading-relaxed">
                   <p>
-                    <strong className="text-foreground">Client-Side Isolation:</strong> By default, your API token is saved solely within your browser’s local storage and is never uploaded to our servers or databases.
+                    <strong className="text-foreground">Client-Side Isolation:</strong> By default, your API token is saved solely within your browser&apos;s local storage and is never uploaded to our servers or databases.
                   </p>
                   <p>
-                    <strong className="text-foreground">Strict Database Encryption:</strong> When you enable cross-device sync, your token is encrypted on your device using industry-standard AES-256-GCM before transmission. It remains encrypted at rest in Cloud Firestore and can only be decrypted by your authenticated sessions.
+                    <strong className="text-foreground">Strict Database Encryption:</strong> When you enable cross-device sync, your token is encrypted on your device using AES-256-GCM before transmission.
                   </p>
                   <p>
                     <strong className="text-foreground">Direct Edge Proxy:</strong> Requests proxy securely through Cloudflare Workers edge nodes directly to Google Gemini. Plaintext tokens are never logged or stored.
@@ -788,26 +812,26 @@ export function UserAuthDialog({ open, onOpenChange, defaultTab = 'auth' }: User
               </div>
 
               {/* Cloud Sync Status Card */}
-              <div className="p-3.5 rounded-lg border border-border/80 bg-muted/20 space-y-2">
+              <div className="bg-secondary/50 rounded-xl p-3.5 text-xs text-muted-foreground border border-border space-y-2">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <Cloud className="w-4 h-4 text-primary" />
                     <span className="text-xs font-semibold text-foreground">Cloud Sync & Storage</span>
                   </div>
-                  <Badge variant="outline" className="text-[11px] text-primary border-primary/30">
+                  <span className="text-xs text-primary bg-primary/10 rounded-full px-2 py-0.5 font-medium">
                     {user ? 'Auto-sync active' : 'Local storage only'}
-                  </Badge>
+                  </span>
                 </div>
 
-                <p className="text-xs text-muted-foreground leading-relaxed">
+                <p className="text-xs leading-relaxed">
                   {user
                     ? 'Your custom quizzes and test history automatically synchronize across your laptop, phone, and tablet.'
                     : 'Sign in to sync your questions and test scores across your devices.'}
                 </p>
 
                 {user && (
-                  <div className="flex items-center justify-between pt-2 border-t border-border/50 text-xs">
-                    <span className="text-muted-foreground text-[11px]">
+                  <div className="flex items-center justify-between pt-2 border-t border-border text-xs">
+                    <span className="text-[11px] text-muted-foreground">
                       {lastSyncTime ? `Last synced: ${new Date(lastSyncTime).toLocaleTimeString()}` : 'Ready to sync'}
                     </span>
                     <Button
@@ -816,7 +840,7 @@ export function UserAuthDialog({ open, onOpenChange, defaultTab = 'auth' }: User
                       size="sm"
                       disabled={isSyncing}
                       onClick={() => syncLibraryWithCloud(false)}
-                      className="h-7 text-xs gap-1"
+                      className="border border-border rounded-xl px-3 py-1.5 text-xs text-muted-foreground hover:bg-secondary hover:text-foreground gap-1.5"
                     >
                       <RefreshCw className={`w-3 h-3 ${isSyncing ? 'animate-spin text-primary' : ''}`} />
                       <span>{isSyncing ? 'Syncing...' : 'Sync Now'}</span>
@@ -826,20 +850,20 @@ export function UserAuthDialog({ open, onOpenChange, defaultTab = 'auth' }: User
               </div>
             </TabsContent>
 
-            {/* TAB 3: SESSIONS */}
+            {/* TAB 4: SESSIONS */}
             <TabsContent value="sessions" className="space-y-3 focus-visible:outline-none m-0">
-              <div className="flex items-center justify-between">
-                <span className="text-xs text-muted-foreground">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-muted-foreground font-medium">
                   Active login sessions:
                 </span>
                 <Button
                   variant="ghost"
                   size="sm"
                   onClick={() => user && loadSessions(user.username)}
-                  className="h-6 px-2 text-[11px] gap-1"
+                  className="text-muted-foreground hover:text-foreground text-xs h-auto py-1 px-2 gap-1"
                 >
                   <RefreshCw className="w-3 h-3" />
-                  Refresh
+                  <span>Refresh</span>
                 </Button>
               </div>
 
@@ -847,7 +871,7 @@ export function UserAuthDialog({ open, onOpenChange, defaultTab = 'auth' }: User
                 {isLoadingSessions ? (
                   <div className="py-8 text-center text-xs text-muted-foreground flex items-center justify-center gap-2">
                     <RefreshCw className="w-4 h-4 animate-spin text-primary" />
-                    Loading devices...
+                    <span>Loading devices...</span>
                   </div>
                 ) : sessionList.length === 0 ? (
                   <div className="py-6 text-center text-xs text-muted-foreground">
@@ -857,34 +881,33 @@ export function UserAuthDialog({ open, onOpenChange, defaultTab = 'auth' }: User
                   sessionList.map((s, idx) => (
                     <div
                       key={s.tokenId || idx}
-                      className="p-2.5 rounded border border-border/60 bg-muted/20 text-xs space-y-1"
+                      className="p-3 rounded-xl border border-border bg-secondary/50 text-xs space-y-1.5"
                     >
                       <div className="flex items-center justify-between">
-                        <span className="text-[11px] font-mono text-primary truncate max-w-[180px]">
+                        <span className="font-mono text-primary text-[11px] truncate max-w-[180px]">
                           {s.tokenId}
                         </span>
-                        <Badge
-                          variant="outline"
-                          className={
+                        <span
+                          className={`text-[10px] rounded-full px-2 py-0.5 font-medium ${
                             idx === 0
-                              ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20 text-[10px] py-0'
-                              : 'text-[10px] py-0 text-muted-foreground'
-                          }
+                              ? 'bg-primary/10 text-primary'
+                              : 'bg-secondary text-muted-foreground border border-border'
+                          }`}
                         >
                           {idx === 0 ? 'Current Device' : 'Other Device'}
-                        </Badge>
+                        </span>
                       </div>
                       <div className="text-[11px] text-muted-foreground flex justify-between">
                         <span>{new Date(s.timestamp).toLocaleDateString()}</span>
-                        <span className="truncate max-w-[120px] text-[10px]">{s.userAgent}</span>
+                        <span className="truncate max-w-[140px]">{s.userAgent}</span>
                       </div>
                     </div>
                   ))
                 )}
               </div>
             </TabsContent>
-          </Tabs>
-        </div>
+          </div>
+        </Tabs>
       </DialogContent>
     </Dialog>
   );

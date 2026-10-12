@@ -4,20 +4,14 @@ import React, { useState } from 'react';
 import { useQuiz } from '@/context/QuizProvider';
 import { summarizeQuizResultsAction } from '@/lib/actions';
 import MarkdownRenderer from '@/components/MarkdownRenderer';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 import {
-  Trophy,
   CheckCircle2,
   XCircle,
-  Clock,
   RotateCcw,
   Sparkles,
   BookmarkCheck,
-  Loader2,
-  Lightbulb,
   Share2,
+  Loader2,
 } from 'lucide-react';
 
 export function ResultsView() {
@@ -29,6 +23,8 @@ export function ResultsView() {
     retryQuiz,
     saveQuizToLibrary,
     openShareModal,
+    isSharing,
+    viewingAttempt,
     setView,
     addToast,
   } = useQuiz();
@@ -36,45 +32,44 @@ export function ResultsView() {
   const [aiSummary, setAiSummary] = useState<string | null>(null);
   const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
 
-  // If no active quiz, look for the most recent attempt in history
-  const latestAttempt = history[0];
-  const currentQuiz = activeQuiz || latestAttempt?.quizData;
-  const currentAnswers = activeQuiz ? userAnswers : latestAttempt?.userAnswers || {};
-  const currentNotes = activeQuiz ? questionNotes : latestAttempt?.questionNotes || {};
+  // If no active quiz or viewing specific attempt, inspect attempt
+  const currentAttempt = viewingAttempt || history[0];
+  const currentQuiz = activeQuiz || currentAttempt?.quizData;
+  const currentAnswers = (activeQuiz && !viewingAttempt) ? userAnswers : currentAttempt?.userAnswers || userAnswers || {};
+  const currentNotes = (activeQuiz && !viewingAttempt) ? questionNotes : currentAttempt?.questionNotes || questionNotes || {};
 
   if (!currentQuiz || !currentQuiz.questions) {
     return (
-      <div className="max-w-md mx-auto py-16 px-4 text-center space-y-4">
-        <h2 className="text-base font-semibold">No quiz results available.</h2>
-        <Button onClick={() => setView('home')} size="sm">
+      <div className="max-w-2xl mx-auto px-4 sm:px-6 py-16 text-center space-y-4">
+        <h2 className="text-base font-medium text-foreground">No quiz results available.</h2>
+        <p className="text-sm text-muted-foreground">Complete a quiz or select an attempt from your library.</p>
+        <button
+          onClick={() => setView('home')}
+          className="inline-flex items-center justify-center bg-primary text-primary-foreground hover:bg-primary/90 rounded-lg px-4 py-2 text-sm font-medium transition-colors"
+        >
           Return to Quiz Creator
-        </Button>
+        </button>
       </div>
     );
   }
 
-  // Calculate scores
+  // Calculate scores safely
   let correctCount = 0;
-  currentQuiz.questions.forEach((q, idx) => {
+  (currentQuiz.questions || []).forEach((q, idx) => {
     if (currentAnswers[idx] === q.correctAnswer) {
       correctCount++;
     }
   });
 
-  const totalCount = currentQuiz.questions.length;
-  const wrongCount = totalCount - correctCount;
-  const percentage = Math.round((correctCount / totalCount) * 100);
-
-  const chartData = [
-    { name: 'Correct', value: correctCount, color: '#10b981' },
-    { name: 'Incorrect', value: wrongCount, color: '#f43f5e' },
-  ];
+  const totalCount = currentQuiz.questions?.length || 0;
+  const wrongCount = Math.max(0, totalCount - correctCount);
+  const percentage = totalCount > 0 ? Math.round((correctCount / totalCount) * 100) : 0;
 
   const getTierFeedback = (pct: number) => {
-    if (pct === 100) return { title: 'Perfect Score!', desc: 'Outstanding accuracy across every single concept.' };
-    if (pct >= 80) return { title: 'Great Job!', desc: 'Solid conceptual understanding with only minor mistakes.' };
-    if (pct >= 50) return { title: 'Good Effort!', desc: 'Good grasp of the basics. Review the highlighted explanations below.' };
-    return { title: 'Keep Practicing!', desc: 'Take a close look at the explanations below and try retaking the quiz.' };
+    if (pct === 100) return { title: 'Perfect Score', desc: 'Outstanding accuracy across every single concept.' };
+    if (pct >= 80) return { title: 'Great Job', desc: 'Solid conceptual understanding with only minor mistakes.' };
+    if (pct >= 50) return { title: 'Good Effort', desc: 'Good grasp of the basics. Review the highlighted explanations below.' };
+    return { title: 'Keep Practicing', desc: 'Take a close look at the explanations below and try retaking the quiz.' };
   };
 
   const tier = getTierFeedback(percentage);
@@ -116,177 +111,140 @@ export function ResultsView() {
   };
 
   return (
-    <div className="max-w-4xl mx-auto px-3 sm:px-6 py-6 pb-20 space-y-6">
-      
-      {/* Header */}
-      <div className="border-b border-border/80 pb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <Badge variant="outline" className="text-xs py-0.5 px-2 text-emerald-500 border-emerald-500/30">
-              Quiz Completed
-            </Badge>
-          </div>
-          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">
-            {currentQuiz.title}
-          </h1>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={retryQuiz}
-            className="h-8 text-xs border-border/70 gap-1.5"
-          >
-            <RotateCcw className="w-3.5 h-3.5 text-primary" />
-            <span>Retake Quiz</span>
-          </Button>
-
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => saveQuizToLibrary(currentQuiz)}
-            className="h-8 text-xs border-border/70 gap-1.5"
-          >
-            <BookmarkCheck className="w-3.5 h-3.5" />
-            <span>Save to Library</span>
-          </Button>
-
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => openShareModal(currentQuiz)}
-            className="h-8 text-xs border-border/70 gap-1.5 text-sky-400 hover:text-sky-300 hover:border-sky-500/40"
-            title="Share this assessment"
-          >
-            <Share2 className="w-3.5 h-3.5" />
-            <span>Share</span>
-          </Button>
-        </div>
+    <div className="max-w-2xl mx-auto px-4 sm:px-6 py-8 pb-20 space-y-6">
+      {/* Page Header */}
+      <div className="border-b border-border pb-4">
+        <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+          {currentQuiz.title}
+        </h1>
+        <p className="text-sm text-muted-foreground mt-1">
+          Assessment Results & Review
+        </p>
       </div>
 
-      {/* Metrics Dashboard */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        
-        {/* Donut Chart Card */}
-        <div className="rounded-lg border border-border bg-card p-4 flex flex-col items-center justify-center relative shadow-xs">
-          <div className="w-36 h-36 relative">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={chartData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={46}
-                  outerRadius={60}
-                  paddingAngle={4}
-                  dataKey="value"
-                  stroke="none"
-                >
-                  {chartData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-                </Pie>
-              </PieChart>
-            </ResponsiveContainer>
-            <div className="absolute inset-0 flex flex-col items-center justify-center font-mono">
-              <span className="text-2xl font-bold tracking-tight text-foreground">{percentage}%</span>
-              <span className="text-[10px] text-muted-foreground uppercase">Score</span>
-            </div>
+      {/* Score Card */}
+      <div className="bg-card border border-border rounded-2xl p-8 shadow-sm">
+        <div className="flex flex-col items-start">
+          <div className="text-5xl font-bold font-mono tracking-tight text-foreground">
+            {correctCount} / {totalCount}
           </div>
+          <div className="text-sm text-muted-foreground mt-1">
+            {percentage}% Correct
+          </div>
+          <div className="text-xs font-medium text-primary bg-primary/10 rounded-full px-3 py-1 mt-3 inline-block">
+            {tier.title}
+          </div>
+          <p className="text-xs text-muted-foreground mt-2 leading-relaxed">
+            {tier.desc}
+          </p>
         </div>
 
-        {/* Qualitative Feedback Card */}
-        <div className="md:col-span-2 rounded-lg border border-border bg-card p-4 sm:p-5 flex flex-col justify-between shadow-xs">
+        {/* Metrics Row */}
+        <div className="grid grid-cols-3 gap-4 pt-5 border-t border-border mt-5">
           <div>
-            <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
-              <Trophy className="w-4 h-4 text-amber-500" />
-              <span>Your Performance</span>
-            </div>
-            <h3 className="text-lg font-bold text-foreground">{tier.title}</h3>
-            <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
-              {tier.desc}
-            </p>
+            <span className="text-xs uppercase tracking-wider text-muted-foreground font-medium block">
+              Correct
+            </span>
+            <span className="text-sm font-semibold text-foreground mt-1 block font-mono">
+              {correctCount}
+            </span>
           </div>
 
-          <div className="grid grid-cols-3 gap-2 pt-3 border-t border-border/50 text-xs">
-            <div className="p-2 rounded bg-muted/30 border border-border/40">
-              <div className="text-muted-foreground text-[10px] flex items-center gap-1">
-                <CheckCircle2 className="w-3 h-3 text-emerald-500" /> Correct
-              </div>
-              <div className="font-bold text-sm text-foreground mt-0.5">{correctCount} / {totalCount}</div>
-            </div>
+          <div>
+            <span className="text-xs uppercase tracking-wider text-muted-foreground font-medium block">
+              Mistakes
+            </span>
+            <span className="text-sm font-semibold text-foreground mt-1 block font-mono">
+              {wrongCount}
+            </span>
+          </div>
 
-            <div className="p-2 rounded bg-muted/30 border border-border/40">
-              <div className="text-muted-foreground text-[10px] flex items-center gap-1">
-                <XCircle className="w-3 h-3 text-rose-500" /> Mistakes
-              </div>
-              <div className="font-bold text-sm text-foreground mt-0.5">{wrongCount}</div>
-            </div>
-
-            <div className="p-2 rounded bg-muted/30 border border-border/40">
-              <div className="text-muted-foreground text-[10px] flex items-center gap-1">
-                <Clock className="w-3 h-3 text-primary" /> Time Spent
-              </div>
-              <div className="font-bold text-sm text-foreground mt-0.5">
-                {latestAttempt?.timeSpent || 'Finished'}
-              </div>
-            </div>
+          <div>
+            <span className="text-xs uppercase tracking-wider text-muted-foreground font-medium block">
+              Time Spent
+            </span>
+            <span className="text-sm font-semibold text-foreground mt-1 block font-mono">
+              {currentAttempt?.timeSpent || 'Finished'}
+            </span>
           </div>
         </div>
-
       </div>
 
-      {/* AI Study Advice Section */}
-      <div className="rounded-lg border border-primary/25 bg-primary/5 p-4 sm:p-5 space-y-3">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-          <div className="flex items-center gap-2">
+      {/* Action Buttons Row */}
+      <div className="flex flex-wrap gap-2">
+        <button
+          onClick={() => retryQuiz(currentQuiz)}
+          className="inline-flex items-center gap-2 bg-primary text-primary-foreground hover:bg-primary/90 rounded-lg px-4 py-2 text-sm font-medium transition-colors"
+        >
+          <RotateCcw className="w-4 h-4" />
+          <span>Retake Quiz</span>
+        </button>
+
+        <button
+          onClick={() => saveQuizToLibrary(currentQuiz)}
+          className="inline-flex items-center gap-2 border border-border rounded-lg px-4 py-2 text-sm text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
+        >
+          <BookmarkCheck className="w-4 h-4" />
+          <span>Save to Library</span>
+        </button>
+
+        <button
+          disabled={isSharing}
+          onClick={() => openShareModal(currentQuiz)}
+          className="inline-flex items-center gap-2 border border-border rounded-lg px-4 py-2 text-sm text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors disabled:opacity-50"
+        >
+          {isSharing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Share2 className="w-4 h-4" />}
+          <span>{isSharing ? 'Sharing...' : 'Share'}</span>
+        </button>
+      </div>
+
+      {/* AI Summary Section */}
+      <div className="bg-card border border-border rounded-2xl p-6 shadow-sm space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="text-sm font-semibold text-foreground flex items-center gap-2">
             <Sparkles className="w-4 h-4 text-primary" />
-            <h3 className="text-sm font-semibold text-foreground">
-              Personalized Study Tips & Review
-            </h3>
+            <span>Personalized Study Tips</span>
           </div>
 
-          {!aiSummary && (
-            <Button
-              size="sm"
-              disabled={isGeneratingSummary}
+          {!aiSummary && !isGeneratingSummary && (
+            <button
               onClick={handleRequestAiSummary}
-              className="h-8 text-xs bg-primary hover:bg-primary/90 text-primary-foreground px-3 gap-1.5 font-medium"
+              className="text-sm text-primary hover:underline font-medium"
             >
-              {isGeneratingSummary ? (
-                <>
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  Analyzing Answers...
-                </>
-              ) : (
-                <>
-                  <Lightbulb className="w-3.5 h-3.5" />
-                  Get Study Advice
-                </>
-              )}
-            </Button>
+              Generate Study Advice
+            </button>
           )}
         </div>
 
-        {aiSummary ? (
-          <div className="text-xs sm:text-sm text-foreground leading-relaxed pt-2 border-t border-primary/20">
-            <MarkdownRenderer content={aiSummary} />
+        {isGeneratingSummary && (
+          <div className="animate-pulse text-sm text-muted-foreground flex items-center gap-2 py-2">
+            <Loader2 className="w-4 h-4 animate-spin text-primary" />
+            <span>Analyzing your answers and generating study recommendations...</span>
           </div>
-        ) : (
-          <p className="text-xs text-muted-foreground">
-            Click <strong>Get Study Advice</strong> to analyze your answers and receive personalized recommendations for concepts you should review.
+        )}
+
+        {aiSummary && (
+          <div className="pt-2 border-t border-border">
+            <div className="text-sm text-muted-foreground leading-relaxed">
+              <MarkdownRenderer content={aiSummary} />
+            </div>
+          </div>
+        )}
+
+        {!aiSummary && !isGeneratingSummary && (
+          <p className="text-sm text-muted-foreground leading-relaxed">
+            Analyze your answers with AI to discover knowledge gaps and focus areas.
           </p>
         )}
       </div>
 
-      {/* Question Review List */}
-      <div className="space-y-3 pt-2">
+      {/* Question Review Section */}
+      <div className="space-y-4 pt-2">
         <div className="flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-foreground">
+          <h2 className="text-sm font-semibold text-foreground">
             Question Review
-          </h3>
-          <span className="text-xs text-muted-foreground">
+          </h2>
+          <span className="text-xs text-muted-foreground font-mono">
             {totalCount} Questions
           </span>
         </div>
@@ -300,72 +258,69 @@ export function ResultsView() {
             return (
               <div
                 key={idx}
-                className={`rounded-lg border p-4 space-y-3 transition-colors ${
+                className={`bg-card border border-border rounded-xl p-4 space-y-2 transition-colors ${
                   isCorrect
-                    ? 'border-border/70 bg-card'
-                    : 'border-rose-500/25 bg-rose-500/5'
+                    ? 'border-l-4 border-l-primary/60'
+                    : 'border-l-4 border-l-destructive/60'
                 }`}
               >
                 <div className="flex items-start justify-between gap-3">
-                  <div className="flex items-start gap-2">
-                    <Badge
-                      variant="outline"
-                      className={`text-[10px] shrink-0 mt-0.5 ${
-                        isCorrect ? 'text-emerald-500 border-emerald-500/30' : 'text-rose-500 border-rose-500/30'
-                      }`}
-                    >
-                      Q{idx + 1}
-                    </Badge>
-                    <div className="text-xs sm:text-sm font-medium text-foreground">
+                  <div className="space-y-1">
+                    <span className="text-xs font-mono text-muted-foreground block">
+                      Question {idx + 1}
+                    </span>
+                    <div className="text-sm font-medium text-foreground">
                       <MarkdownRenderer content={q.question} />
                     </div>
                   </div>
 
-                  <div className="shrink-0">
+                  <div className="shrink-0 pt-0.5">
                     {isCorrect ? (
-                      <span className="flex items-center gap-1 text-xs text-emerald-500 font-medium">
-                        <CheckCircle2 className="w-3.5 h-3.5" /> Correct
+                      <span className="flex items-center gap-1.5 text-xs text-primary font-medium">
+                        <CheckCircle2 className="w-4 h-4 text-primary" />
+                        <span>Correct</span>
                       </span>
                     ) : (
-                      <span className="flex items-center gap-1 text-xs text-rose-500 font-medium">
-                        <XCircle className="w-3.5 h-3.5" /> Incorrect
+                      <span className="flex items-center gap-1.5 text-xs text-destructive font-medium">
+                        <XCircle className="w-4 h-4 text-destructive" />
+                        <span>Incorrect</span>
                       </span>
                     )}
                   </div>
                 </div>
 
-                {/* Answers Comparison */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs pt-1">
-                  <div className={`p-2.5 rounded border ${
-                    isCorrect
-                      ? 'bg-emerald-500/10 border-emerald-500/30 text-foreground'
-                      : 'bg-rose-500/10 border-rose-500/30 text-foreground'
-                  }`}>
-                    <div className="text-[10px] text-muted-foreground uppercase font-medium">Your Choice:</div>
-                    <div className="mt-0.5">
-                      {userChoice !== undefined ? (
+                {/* Answers Row */}
+                <div className="space-y-1.5 pt-1 text-xs">
+                  <div className="flex items-center gap-2 text-muted-foreground">
+                    <span className="font-medium">Your answer:</span>
+                    <span className={isCorrect ? 'text-foreground' : 'text-destructive'}>
+                      {userChoice !== undefined && q.options && q.options[userChoice] !== undefined ? (
                         <MarkdownRenderer content={q.options[userChoice]} inline />
                       ) : (
-                        <span className="italic text-muted-foreground">Skipped</span>
+                        <span className="italic">{userChoice !== undefined ? `Option ${userChoice + 1}` : 'Skipped'}</span>
                       )}
-                    </div>
+                    </span>
                   </div>
 
                   {!isCorrect && (
-                    <div className="p-2.5 rounded bg-emerald-500/10 border border-emerald-500/30 text-foreground">
-                      <div className="text-[10px] text-emerald-600 dark:text-emerald-400 uppercase font-medium">Correct Answer:</div>
-                      <div className="mt-0.5">
-                        <MarkdownRenderer content={q.options[q.correctAnswer]} inline />
-                      </div>
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <span className="font-medium text-foreground">Correct answer:</span>
+                      <span className="text-primary font-medium">
+                        {q.options && q.options[q.correctAnswer] !== undefined ? (
+                          <MarkdownRenderer content={q.options[q.correctAnswer]} inline />
+                        ) : (
+                          <span>Option {q.correctAnswer + 1}</span>
+                        )}
+                      </span>
                     </div>
                   )}
                 </div>
 
                 {/* Explanation */}
                 {q.explanation && (
-                  <div className="p-2.5 rounded bg-muted/40 border border-border/40 text-xs text-muted-foreground space-y-1">
-                    <span className="font-semibold text-foreground text-[11px]">Explanation:</span>
-                    <div className="leading-relaxed text-foreground/90">
+                  <div className="mt-2 pt-2 border-t border-border/60 text-xs text-muted-foreground space-y-1">
+                    <span className="font-medium text-foreground">Explanation:</span>
+                    <div className="leading-relaxed">
                       <MarkdownRenderer content={q.explanation} />
                     </div>
                   </div>
@@ -373,9 +328,11 @@ export function ResultsView() {
 
                 {/* User Note */}
                 {note && (
-                  <div className="p-2 rounded bg-amber-500/10 border border-amber-500/30 text-xs text-foreground">
-                    <span className="text-[10px] text-amber-600 dark:text-amber-400 uppercase font-semibold block mb-0.5">Your Note:</span>
-                    {note}
+                  <div className="mt-2 p-2 rounded-lg bg-secondary text-xs text-foreground space-y-0.5">
+                    <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold block">
+                      Your Note
+                    </span>
+                    <p>{note}</p>
                   </div>
                 )}
               </div>
@@ -383,7 +340,6 @@ export function ResultsView() {
           })}
         </div>
       </div>
-
     </div>
   );
 }

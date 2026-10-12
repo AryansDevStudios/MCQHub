@@ -4,77 +4,58 @@
 
 @layer base {
   :root {
-    --background: 210 20% 98%;
-    --foreground: 222 47% 11%;
-    
+    --background: 40 33% 97%;
+    --foreground: 20 14% 10%;
     --card: 0 0% 100%;
-    --card-foreground: 222 47% 11%;
-    
+    --card-foreground: 20 14% 10%;
     --popover: 0 0% 100%;
-    --popover-foreground: 222 47% 11%;
-    
-    --primary: 199 89% 42%;
+    --popover-foreground: 20 14% 10%;
+    --primary: 174 84% 32%;
     --primary-foreground: 0 0% 100%;
-    
-    --secondary: 210 20% 94%;
-    --secondary-foreground: 222 47% 11%;
-    
-    --muted: 210 20% 94%;
-    --muted-foreground: 215 16% 47%;
-    
-    --accent: 210 20% 92%;
-    --accent-foreground: 222 47% 11%;
-
-    --destructive: 0 84% 60%;
-    --destructive-foreground: 0 0% 98%;
-    
-    --border: 214 20% 88%;
-    --input: 214 20% 88%;
-    --ring: 199 89% 42%;
-    
-    --radius: 0.375rem;
-
-    --chart-1: 152 69% 40%;
-    --chart-2: 0 72% 51%;
+    --secondary: 40 18% 94%;
+    --secondary-foreground: 20 14% 26%;
+    --muted: 40 18% 94%;
+    --muted-foreground: 25 10% 47%;
+    --accent: 40 18% 92%;
+    --accent-foreground: 20 14% 10%;
+    --destructive: 345 83% 50%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 30 13% 88%;
+    --input: 30 13% 88%;
+    --ring: 174 84% 32%;
+    --radius: 0.5rem;
+    --chart-1: 174 84% 32%;
+    --chart-2: 345 83% 50%;
     --chart-3: 38 92% 50%;
-    --chart-4: 199 89% 48%;
-    --chart-5: 262 83% 58%;
+    --chart-4: 199 89% 42%;
+    --chart-5: 25 10% 47%;
   }
 
   .dark {
-    --background: 224 25% 6%;
-    --foreground: 210 20% 96%;
-    
-    --card: 224 22% 9%;
-    --card-foreground: 210 20% 96%;
-    
-    --popover: 224 22% 9%;
-    --popover-foreground: 210 20% 96%;
-    
-    --primary: 199 89% 48%;
-    --primary-foreground: 224 25% 6%;
-    
-    --secondary: 224 16% 14%;
-    --secondary-foreground: 210 20% 96%;
-    
-    --muted: 224 16% 13%;
-    --muted-foreground: 215 16% 62%;
-    
-    --accent: 224 16% 16%;
-    --accent-foreground: 210 20% 96%;
-
-    --destructive: 0 72% 51%;
-    --destructive-foreground: 210 20% 96%;
-    
-    --border: 224 16% 18%;
-    --input: 224 16% 18%;
-    --ring: 199 89% 48%;
-
-    --chart-1: 152 69% 45%;
-    --chart-2: 0 72% 55%;
-    --chart-3: 38 92% 50%;
+    --background: 20 14% 8%;
+    --foreground: 40 15% 92%;
+    --card: 20 14% 11%;
+    --card-foreground: 40 15% 92%;
+    --popover: 20 14% 11%;
+    --popover-foreground: 40 15% 92%;
+    --primary: 174 84% 40%;
+    --primary-foreground: 20 14% 8%;
+    --secondary: 20 10% 15%;
+    --secondary-foreground: 40 15% 80%;
+    --muted: 20 10% 14%;
+    --muted-foreground: 30 8% 55%;
+    --accent: 20 10% 16%;
+    --accent-foreground: 40 15% 92%;
+    --destructive: 345 72% 55%;
+    --destructive-foreground: 40 15% 92%;
+    --border: 20 10% 20%;
+    --input: 20 10% 20%;
+    --ring: 174 84% 40%;
+    --chart-1: 174 84% 45%;
+    --chart-2: 345 72% 60%;
+    --chart-3: 38 92% 55%;
     --chart-4: 199 89% 55%;
-    --chart-5: 262 83% 65%;
+    --chart-5: 30 8% 65%;
   }
 }
 
@@ -82,34 +63,57 @@
   * {
     @apply border-border;
   }
+
   body {
-    @apply bg-background text-foreground antialiased selection:bg-primary/20 selection:text-primary;
+    @apply bg-background text-foreground antialiased selection:bg-primary/15 selection:text-primary;
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    letter-spacing: -0.011em;
+    line-height: 1.55;
   }
 
-  /* Custom Editor Scrollbar */
+  /* Thin custom scrollbar styling */
   ::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
+    width: 5px;
+    height: 5px;
   }
   ::-webkit-scrollbar-track {
     background: transparent;
   }
   ::-webkit-scrollbar-thumb {
-    background: hsl(var(--muted-foreground) / 0.25);
+    background: hsl(var(--border));
     border-radius: 3px;
   }
   ::-webkit-scrollbar-thumb:hover {
-    background: hsl(var(--muted-foreground) / 0.45);
+    background: hsl(var(--muted-foreground) / 0.3);
   }
 
-  /* Compact number inputs */
-  input[type=number]::-webkit-inner-spin-button,
-  input[type=number]::-webkit-outer-spin-button {
+  /* Compact number inputs without spinners */
+  input[type="number"]::-webkit-inner-spin-button,
+  input[type="number"]::-webkit-outer-spin-button {
     -webkit-appearance: none;
     margin: 0;
   }
-  input[type=number] {
+  input[type="number"] {
     -moz-appearance: textfield;
+  }
+
+  /* Smooth transitions on interactive elements */
+  button,
+  a,
+  input,
+  select,
+  textarea {
+    transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+}
+
+@layer components {
+  /* Navigation underline indicator style */
+  .zen-underline-nav {
+    @apply relative border-b-2 border-transparent text-muted-foreground hover:text-foreground transition-colors pb-2 font-medium;
+  }
+  .zen-underline-nav.active,
+  .zen-underline-nav[data-state="active"] {
+    @apply border-primary text-foreground;
   }
 }

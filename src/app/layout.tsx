@@ -6,6 +6,7 @@ import { Providers } from '@/components/Providers';
 
 const fontSans = Inter({
   subsets: ['latin'],
+  weight: ['300', '400', '500', '600', '700'],
   variable: '--font-sans',
 });
 
@@ -15,9 +16,9 @@ const fontMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'MCQHub - Assessment Studio & Examination Engine',
+  title: 'MCQHub — AI Practice Quiz Engine',
   description:
-    'Engineering-grade generative assessment engine with LaTeX math, Firebase Firestore database, and Gemini 3.5 Flash Lite.',
+    'Create AI-powered multiple-choice quizzes on any topic. Minimal, focused, distraction-free.',
   icons: {
     icon: [
       { url: '/favicon.ico', sizes: 'any' },
@@ -43,10 +44,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="dark" suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning>
       <body
         className={cn(
-          'min-h-screen bg-background font-sans text-foreground antialiased selection:bg-primary/20',
+          'min-h-screen bg-background font-sans text-foreground antialiased',
           fontSans.variable,
           fontMono.variable
         )}

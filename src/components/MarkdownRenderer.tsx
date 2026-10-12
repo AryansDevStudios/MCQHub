@@ -14,10 +14,13 @@ interface MarkdownRendererProps {
 }
 
 const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, className, inline = false }) => {
-  if (!content) return null;
+  const safeContent = typeof content === 'string' ? content : String(content ?? '');
+  if (!safeContent) return null;
+
+  const WrapperTag = inline ? 'span' : 'div';
 
   return (
-    <div className={cn(inline ? 'inline' : 'space-y-2', className)}>
+    <WrapperTag className={cn(inline ? 'inline' : 'space-y-2', className)}>
       <ReactMarkdown
         className={cn(
           'prose dark:prose-invert max-w-none text-inherit text-xs sm:text-sm',
@@ -26,7 +29,7 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, className,
             : 'prose-p:my-1.5 prose-headings:my-2 prose-ul:my-1.5 prose-li:my-0.5'
         )}
         remarkPlugins={[remarkMath]}
-        rehypePlugins={[rehypeKatex]}
+        rehypePlugins={[[rehypeKatex, { throwOnError: false, strict: false }]]}
         components={
           inline
             ? {
@@ -72,9 +75,9 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, className,
               }
         }
       >
-        {content}
+        {safeContent}
       </ReactMarkdown>
-    </div>
+    </WrapperTag>
   );
 };
 

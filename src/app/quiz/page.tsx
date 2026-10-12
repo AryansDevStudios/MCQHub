@@ -5,13 +5,11 @@ import { useQuiz } from '@/context/QuizProvider';
 import { ViewSwitcher } from '@/components/layout/ViewSwitcher';
 
 export default function QuizPage() {
-  const { setView, activeQuiz, activeExamSession } = useQuiz();
+  const { setView } = useQuiz();
 
   useEffect(() => {
-    if (activeQuiz || activeExamSession) {
-      setView('quiz');
-    }
-  }, [setView, activeQuiz, activeExamSession]);
+    setView('quiz');
+  }, [setView]);
 
   return <ViewSwitcher />;
 }

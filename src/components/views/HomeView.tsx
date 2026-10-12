@@ -73,7 +73,7 @@ export function HomeView() {
   } = useQuiz();
 
   const [topic, setTopic] = useState('');
-  const [questionCount, setQuestionCount] = useState(5);
+  const [questionCount, setQuestionCount] = useState<number | string>(5);
   const [difficulty, setDifficulty] = useState<'Easy' | 'Medium' | 'Hard'>('Medium');
   const [quizStyle, setQuizStyle] = useState<'General' | 'Conceptual' | 'Problem Solving'>('General');
   const [context, setContext] = useState('');
@@ -135,6 +135,7 @@ export function HomeView() {
       }
 
       const newQuiz: Quiz = {
+        id: `quiz_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
         title: res.data.title,
         questions: res.data.questions,
         createdAt: new Date().toISOString(),
@@ -157,29 +158,28 @@ export function HomeView() {
   };
 
   return (
-    <div className="max-w-3xl mx-auto px-3 sm:px-6 py-6 pb-20 space-y-6">
+    <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8 pb-24 space-y-6">
       
-      {/* Unsubmitted Active Test (Prominently displayed in Create Practice Menu) */}
+      {/* Unsubmitted Active Test Banner */}
       {activeExamSession && (
-        <div className="rounded-xl border border-emerald-500/40 bg-card p-4 sm:p-5 shadow-sm space-y-3 animate-in fade-in transition-all relative overflow-hidden">
-          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-emerald-500 to-teal-400" />
-          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 pt-1">
+        <div className="rounded-xl border border-border border-l-4 border-l-primary bg-card p-5 space-y-3 shadow-sm animate-in fade-in transition-all">
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
             <div className="space-y-1.5 min-w-0">
               <div className="flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
-                <Badge className="bg-emerald-500/15 text-emerald-500 border border-emerald-500/30 text-[10px] px-2 py-0.5 font-medium">
+                <span className="w-2 h-2 rounded-full bg-primary animate-pulse shrink-0" />
+                <span className="text-xs text-primary bg-primary/10 rounded-full px-2 py-0.5 font-medium">
                   Unsubmitted Quiz (In Progress)
-                </Badge>
+                </span>
                 <span className="text-xs text-muted-foreground font-mono">
                   Question {(activeExamSession.currentQuestionIndex || 0) + 1} of {activeExamSession.quiz.questions.length}
                 </span>
               </div>
-              <h2 className="text-base sm:text-lg font-bold text-foreground leading-snug">
+              <h2 className="text-base sm:text-lg font-semibold text-foreground leading-snug">
                 {activeExamSession.quiz.title}
               </h2>
-              <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+              <div className="flex flex-wrap items-center gap-2.5 text-xs text-muted-foreground">
                 <span>
-                  Answered <strong>{Object.keys(activeExamSession.userAnswers || {}).length}</strong> of {activeExamSession.quiz.questions.length} questions
+                  Answered <strong className="text-foreground font-medium">{Object.keys(activeExamSession.userAnswers || {}).length}</strong> of {activeExamSession.quiz.questions.length} questions
                 </span>
                 <span>•</span>
                 <span>
@@ -199,16 +199,16 @@ export function HomeView() {
             <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
               <Button
                 size="sm"
-                variant="outline"
+                variant="ghost"
                 onClick={discardActiveExam}
-                className="h-8 text-xs text-muted-foreground hover:text-rose-500 hover:border-rose-500/40"
+                className="text-muted-foreground hover:text-destructive text-sm h-8 px-3"
               >
                 Discard
               </Button>
               <Button
                 size="sm"
                 onClick={resumeActiveExam}
-                className="h-8 text-xs bg-emerald-600 hover:bg-emerald-500 text-white font-semibold gap-1.5 px-4 shadow-sm"
+                className="bg-primary text-primary-foreground hover:bg-primary/90 rounded-lg px-4 py-1.5 text-sm font-medium gap-1.5"
               >
                 <Play className="w-3.5 h-3.5 fill-current" />
                 <span>Resume Test</span>
@@ -218,32 +218,29 @@ export function HomeView() {
         </div>
       )}
 
-      {/* Header */}
-      <div className="border-b border-border/80 pb-4">
-        <div className="flex items-center gap-2 mb-1">
-          <Badge variant="outline" className="text-xs py-0.5 px-2 text-primary border-primary/30">
-            Quiz Creator
-          </Badge>
+      {/* Page Header */}
+      <div className="border-b border-border pb-5 mb-6">
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+            Create Practice Quiz
+          </h1>
           {hasCustomKey && (
-            <span className="text-[11px] text-muted-foreground">
+            <span className="text-xs text-muted-foreground">
               (Using custom API key)
             </span>
           )}
         </div>
-        <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">
-          Create Practice Quiz
-        </h1>
-        <p className="text-xs sm:text-sm text-muted-foreground mt-1 max-w-xl">
+        <p className="text-sm text-muted-foreground mt-1 max-w-xl">
           Generate multiple-choice practice questions on any topic in seconds. Formatted with math equations and diagrams.
         </p>
       </div>
 
-      {/* Main Generator Card */}
-      <div className="rounded-lg border border-border bg-card shadow-xs overflow-hidden">
-        <form onSubmit={handleGenerate} className="p-4 sm:p-6 space-y-5">
+      {/* Main Creator Card */}
+      <div className="bg-card border border-border rounded-2xl p-6 sm:p-8 shadow-sm">
+        <form onSubmit={handleGenerate} className="space-y-6">
           
           {/* Topic Input */}
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             <Label className="text-xs font-semibold text-foreground flex items-center justify-between">
               <span>Topic</span>
               <span className="text-[11px] text-muted-foreground font-normal">Required</span>
@@ -253,7 +250,7 @@ export function HomeView() {
               placeholder="e.g., Photosynthesis, Laws of Motion, French Revolution, Trigonometry..."
               value={topic}
               onChange={(e) => setTopic(e.target.value)}
-              className="h-9 text-xs sm:text-sm bg-background"
+              className="bg-background border border-border rounded-xl px-4 py-3 text-sm w-full outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/20 transition-colors h-11"
               required
             />
 
@@ -263,14 +260,14 @@ export function HomeView() {
                 <button
                   type="button"
                   onClick={refreshIdeas}
-                  className="group inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                  className="group inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
                   title="Click to randomize ideas"
                 >
-                  <Sparkles className="w-3.5 h-3.5 text-primary group-hover:scale-110 transition-transform" />
-                  <span className="font-semibold text-foreground/90">Ideas</span>
+                  <Sparkles className="w-3.5 h-3.5 text-muted-foreground group-hover:text-primary transition-colors" />
+                  <span className="font-medium">Ideas</span>
                   <RefreshCw className="w-3 h-3 text-muted-foreground group-hover:text-primary transition-colors ml-0.5" />
                 </button>
-                <span className="text-[10px] text-muted-foreground">Click to pick a topic</span>
+                <span className="text-xs text-muted-foreground">Click to pick a topic</span>
               </div>
 
               {/* 4 to 5 Random Study Ideas */}
@@ -282,10 +279,10 @@ export function HomeView() {
                       type="button"
                       key={idea}
                       onClick={() => setTopic(idea)}
-                      className={`inline-flex items-center px-2.5 py-1 rounded-md text-[11px] border transition-all text-left ${
+                      className={`text-xs px-3 py-1 rounded-full cursor-pointer transition-colors ${
                         isSelected
-                          ? 'bg-primary/10 border-primary text-primary font-medium shadow-xs'
-                          : 'bg-muted/30 hover:bg-muted/80 border-border/70 text-foreground/80 hover:text-foreground'
+                          ? 'bg-primary/10 text-primary border border-primary/20'
+                          : 'bg-secondary text-muted-foreground hover:text-foreground hover:bg-secondary/80'
                       }`}
                     >
                       {idea}
@@ -296,48 +293,54 @@ export function HomeView() {
             </div>
           </div>
 
-          {/* Reference Material / Context (Collapsible) */}
-          <div className="rounded border border-border/60 bg-background/50 overflow-hidden">
+          {/* Context/Notes Accordion */}
+          <div className="border-t border-border pt-2">
             <button
               type="button"
               onClick={() => setShowContext(!showContext)}
-              className="w-full px-3 py-2 text-left flex items-center justify-between text-xs text-muted-foreground hover:text-foreground transition-colors"
+              className="text-xs text-muted-foreground hover:text-foreground flex items-center justify-between w-full py-2 transition-colors"
             >
               <div className="flex items-center gap-1.5">
                 <span>Add Reference Notes or Syllabus (Optional)</span>
-                {context && <Badge variant="secondary" className="text-[10px] py-0 px-1">Added</Badge>}
+                {context && (
+                  <Badge variant="secondary" className="text-[10px] py-0 px-1.5 font-normal">
+                    Added
+                  </Badge>
+                )}
               </div>
               {showContext ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
             </button>
 
             {showContext && (
-              <div className="p-3 pt-0 border-t border-border/40">
+              <div className="pt-2">
                 <Textarea
                   placeholder="Paste lecture notes, book paragraphs, or formulas to base the questions on..."
                   value={context}
                   onChange={(e) => setContext(e.target.value)}
-                  className="text-xs min-h-[90px] bg-background"
+                  className="text-xs min-h-[90px] bg-background border border-border rounded-lg"
                 />
               </div>
             )}
           </div>
 
-          {/* Options Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+          {/* Config Grid (Difficulty / Count / Style) */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 pt-5 border-t border-border mb-6">
             
             {/* Difficulty */}
-            <div className="space-y-1.5">
-              <Label className="text-xs font-medium text-foreground">Difficulty</Label>
+            <div className="space-y-2">
+              <Label className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-2 block">
+                Difficulty
+              </Label>
               <div className="grid grid-cols-3 gap-1">
                 {(['Easy', 'Medium', 'Hard'] as const).map((lvl) => (
                   <button
                     type="button"
                     key={lvl}
                     onClick={() => setDifficulty(lvl)}
-                    className={`py-1.5 px-2 rounded text-xs transition-colors border ${
+                    className={`py-1.5 px-2 text-xs rounded-md border transition-colors ${
                       difficulty === lvl
-                        ? 'bg-primary/15 border-primary text-primary font-semibold'
-                        : 'border-border/60 hover:bg-muted text-muted-foreground'
+                        ? 'bg-primary/10 border-primary/30 text-primary font-medium'
+                        : 'border-border text-muted-foreground hover:bg-secondary hover:text-foreground'
                     }`}
                   >
                     {lvl}
@@ -346,22 +349,24 @@ export function HomeView() {
               </div>
             </div>
 
-            {/* Question Count (No artificial limit!) */}
-            <div className="space-y-1.5">
-              <Label className="text-xs font-medium text-foreground flex items-center justify-between">
-                <span>Number of Questions</span>
+            {/* Question Count */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between mb-2">
+                <Label className="text-xs font-medium uppercase tracking-wider text-muted-foreground block">
+                  Questions
+                </Label>
                 <span className="text-[10px] text-muted-foreground">Any count</span>
-              </Label>
+              </div>
               <div className="flex items-center gap-1">
                 {[5, 10, 15, 20].map((cnt) => (
                   <button
                     type="button"
                     key={cnt}
                     onClick={() => setQuestionCount(cnt)}
-                    className={`flex-1 py-1.5 rounded text-xs transition-colors border ${
+                    className={`flex-1 py-1.5 px-2 text-xs rounded-md border transition-colors ${
                       questionCount === cnt
-                        ? 'bg-primary/15 border-primary text-primary font-semibold'
-                        : 'border-border/60 hover:bg-muted text-muted-foreground'
+                        ? 'bg-primary/10 border-primary/30 text-primary font-medium'
+                        : 'border-border text-muted-foreground hover:bg-secondary hover:text-foreground'
                     }`}
                   >
                     {cnt}
@@ -372,26 +377,41 @@ export function HomeView() {
                   min="1"
                   max="100"
                   value={questionCount}
-                  onChange={(e) => setQuestionCount(Math.max(1, parseInt(e.target.value) || 5))}
-                  className="w-14 h-[30px] text-xs text-center px-1 bg-background"
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (val === '') {
+                      setQuestionCount('');
+                    } else {
+                      const num = parseInt(val, 10);
+                      setQuestionCount(isNaN(num) ? '' : Math.min(100, Math.max(1, num)));
+                    }
+                  }}
+                  onBlur={() => {
+                    if (!questionCount || Number(questionCount) < 1) {
+                      setQuestionCount(5);
+                    }
+                  }}
+                  className="w-12 h-[30px] text-xs text-center rounded-md border border-border bg-background px-1"
                   title="Custom question count"
                 />
               </div>
             </div>
 
             {/* Style */}
-            <div className="space-y-1.5">
-              <Label className="text-xs font-medium text-foreground">Style</Label>
+            <div className="space-y-2">
+              <Label className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-2 block">
+                Style
+              </Label>
               <div className="grid grid-cols-3 gap-1">
                 {(['General', 'Conceptual', 'Problem Solving'] as const).map((stl) => (
                   <button
                     type="button"
                     key={stl}
                     onClick={() => setQuizStyle(stl)}
-                    className={`py-1.5 px-1 truncate rounded text-[11px] transition-colors border ${
+                    className={`py-1.5 px-1 truncate text-xs rounded-md border transition-colors ${
                       quizStyle === stl
-                        ? 'bg-primary/15 border-primary text-primary font-semibold'
-                        : 'border-border/60 hover:bg-muted text-muted-foreground'
+                        ? 'bg-primary/10 border-primary/30 text-primary font-medium'
+                        : 'border-border text-muted-foreground hover:bg-secondary hover:text-foreground'
                     }`}
                     title={stl}
                   >
@@ -403,14 +423,14 @@ export function HomeView() {
 
           </div>
 
-          {/* Behavioral Switches */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-border/60">
-            <div className="flex items-center justify-between p-2.5 rounded bg-muted/20 border border-border/40">
-              <div className="space-y-0.5">
-                <Label className="text-xs font-medium cursor-pointer" htmlFor="instant-mode">
+          {/* Toggle Switches */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-5 border-t border-border mb-6">
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5 pr-2">
+                <Label className="text-sm font-medium text-foreground cursor-pointer" htmlFor="instant-mode">
                   Instant Feedback Mode
                 </Label>
-                <div className="text-[11px] text-muted-foreground">
+                <div className="text-xs text-muted-foreground">
                   Check answers immediately per question
                 </div>
               </div>
@@ -421,12 +441,12 @@ export function HomeView() {
               />
             </div>
 
-            <div className="flex items-center justify-between p-2.5 rounded bg-muted/20 border border-border/40">
-              <div className="space-y-0.5">
-                <Label className="text-xs font-medium cursor-pointer" htmlFor="with-explanations">
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5 pr-2">
+                <Label className="text-sm font-medium text-foreground cursor-pointer" htmlFor="with-explanations">
                   Include Explanations
                 </Label>
-                <div className="text-[11px] text-muted-foreground">
+                <div className="text-xs text-muted-foreground">
                   Generate answer explanations for each question
                 </div>
               </div>
@@ -438,12 +458,12 @@ export function HomeView() {
             </div>
           </div>
 
-          {/* Submit Button */}
-          <div className="pt-2">
+          {/* Generate Button */}
+          <div>
             <Button
               type="submit"
               disabled={isGenerating}
-              className="w-full h-10 text-xs sm:text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground transition-colors shadow-xs"
+              className="w-full h-11 bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl text-sm font-medium transition-colors"
             >
               {isGenerating ? (
                 <>
@@ -461,14 +481,16 @@ export function HomeView() {
         </form>
       </div>
 
-      {/* Generated Quiz Result Banner */}
+      {/* Quiz Ready Banner */}
       {generatedQuiz && (
-        <div className="rounded-lg border border-emerald-500/30 bg-emerald-950/20 p-4 sm:p-5 space-y-3 animate-in fade-in slide-in-from-bottom-2">
-          <div className="flex items-start justify-between">
-            <div className="flex items-start gap-2.5">
-              <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
+        <div className="mt-5 border border-border bg-card rounded-xl p-5 border-l-4 border-l-primary space-y-4 shadow-sm animate-in fade-in slide-in-from-bottom-2">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-start gap-3">
+              <div className="w-9 h-9 rounded-full bg-primary/10 text-primary flex items-center justify-center shrink-0 mt-0.5">
+                <CheckCircle2 className="w-5 h-5" />
+              </div>
               <div>
-                <h3 className="text-sm sm:text-base font-bold text-foreground">
+                <h3 className="text-sm font-semibold text-foreground">
                   {generatedQuiz.title}
                 </h3>
                 <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
@@ -480,39 +502,39 @@ export function HomeView() {
                 </div>
               </div>
             </div>
-            <Badge className="bg-emerald-500/20 text-emerald-300 border-emerald-500/30 text-xs">
+            <Badge variant="outline" className="text-xs text-primary bg-primary/10 border-primary/20 rounded-full px-2.5 py-0.5">
               Ready
             </Badge>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-emerald-500/20">
+          <div className="flex flex-wrap items-center gap-2.5 pt-3 border-t border-border">
             <Button
               size="sm"
               onClick={() => startQuiz(generatedQuiz, instantMode)}
-              className="h-8 text-xs font-medium bg-emerald-500 hover:bg-emerald-600 text-black px-3.5"
+              className="bg-primary text-primary-foreground hover:bg-primary/90 rounded-lg px-4 py-1.5 text-sm font-medium"
             >
               <Play className="w-3.5 h-3.5 mr-1.5 fill-current" />
               Start Quiz Now
             </Button>
 
             <Button
-              variant="outline"
+              variant="ghost"
               size="sm"
               disabled={isSharing}
               onClick={() => openShareModal(generatedQuiz)}
-              className="h-8 text-xs border-emerald-500/40 text-emerald-300 hover:text-emerald-200 hover:bg-emerald-950/50"
+              className="text-sm text-muted-foreground hover:text-foreground h-8"
             >
               <Share2 className="w-3.5 h-3.5 mr-1.5" />
               {isSharing ? 'Sharing...' : 'Share Quiz'}
             </Button>
 
             <Button
-              variant="outline"
+              variant="ghost"
               size="sm"
               onClick={handleOpenInEditor}
-              className="h-8 text-xs border-border/80"
+              className="text-sm text-muted-foreground hover:text-foreground h-8"
             >
-              <FileCode2 className="w-3.5 h-3.5 mr-1.5 text-primary" />
+              <FileCode2 className="w-3.5 h-3.5 mr-1.5" />
               Edit in JSON Studio
             </Button>
 
@@ -520,7 +542,7 @@ export function HomeView() {
               variant="ghost"
               size="sm"
               onClick={() => setView('library')}
-              className="h-8 text-xs"
+              className="text-sm text-muted-foreground hover:text-foreground h-8"
             >
               <BookmarkCheck className="w-3.5 h-3.5 mr-1.5" />
               View in Library

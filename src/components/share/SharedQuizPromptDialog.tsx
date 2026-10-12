@@ -7,7 +7,6 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
-  DialogFooter,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -27,41 +26,42 @@ export function SharedQuizPromptDialog() {
 
   return (
     <Dialog open={!!pendingSharedQuiz} onOpenChange={(open) => !open && dismissPendingSharedQuiz()}>
-      <DialogContent className="w-[calc(100vw-2rem)] max-w-md bg-card border-border text-foreground rounded-xl shadow-2xl p-5 sm:p-6 animate-in fade-in zoom-in-95">
-        <DialogHeader className="space-y-1.5 pb-2 border-b border-border/80">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+      <DialogContent className="w-[calc(100vw-2rem)] max-w-md bg-card border border-border text-foreground rounded-2xl shadow-xl p-0 overflow-hidden">
+        {/* Header */}
+        <DialogHeader className="px-6 pt-6 pb-4 border-b border-border">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-xl bg-secondary flex items-center justify-center text-muted-foreground shrink-0">
               <Share2 className="w-4 h-4" />
             </div>
-            <div>
-              <DialogTitle className="text-base font-bold text-foreground">
+            <div className="min-w-0">
+              <DialogTitle className="text-base font-semibold text-foreground tracking-tight">
                 Shared Assessment Found
               </DialogTitle>
-              <DialogDescription className="text-xs text-muted-foreground">
+              <DialogDescription className="text-sm text-muted-foreground mt-0.5">
                 An assessment set has been shared with you.
               </DialogDescription>
             </div>
           </div>
         </DialogHeader>
 
-        <div className="space-y-4 pt-2">
+        <div className="px-6 py-5 space-y-4">
           {/* Quiz Details Card */}
-          <div className="rounded-xl border border-primary/30 bg-primary/5 p-4 space-y-2">
+          <div className="rounded-xl border border-border bg-secondary/50 p-4 space-y-2.5">
             <div className="flex items-start justify-between gap-2">
-              <h3 className="text-sm sm:text-base font-bold text-foreground leading-snug">
-                {quiz.title}
+              <h3 className="text-sm sm:text-base font-semibold text-foreground leading-snug">
+                {quiz.title || 'Untitled Assessment'}
               </h3>
-              <Badge className="bg-primary/20 text-primary border-primary/30 text-[10px] shrink-0 font-mono">
-                {quiz.questions.length} Questions
+              <Badge variant="outline" className="text-xs text-primary border-border bg-background shrink-0 font-mono">
+                {quiz.questions?.length ?? 0} Questions
               </Badge>
             </div>
 
-            <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground pt-1 border-t border-border/40">
-              <span className="flex items-center gap-1">
+            <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground pt-1.5 border-t border-border">
+              <span className="flex items-center gap-1.5">
                 <UserCheck className="w-3.5 h-3.5 text-primary" />
-                <span>Original Creator: <strong>{createdBy ? `@${createdBy}` : 'Collaborator'}</strong></span>
+                <span>Original Creator: <strong className="text-foreground">{createdBy ? `@${createdBy}` : 'Collaborator'}</strong></span>
               </span>
-              {pendingSharedQuiz.createdAt && (
+              {pendingSharedQuiz.createdAt && !isNaN(new Date(pendingSharedQuiz.createdAt).getTime()) && (
                 <>
                   <span>•</span>
                   <span>Created: {new Date(pendingSharedQuiz.createdAt).toLocaleDateString()}</span>
@@ -70,33 +70,35 @@ export function SharedQuizPromptDialog() {
               {pendingSharedQuiz.shareId && (
                 <>
                   <span>•</span>
-                  <span className="font-mono font-bold text-emerald-500">#{pendingSharedQuiz.shareId}</span>
+                  <span className="font-mono font-medium text-primary">#{pendingSharedQuiz.shareId}</span>
                 </>
               )}
             </div>
           </div>
 
-          <div className="rounded-lg border border-border/60 bg-muted/20 p-3 text-[11px] text-muted-foreground space-y-1 leading-relaxed">
+          {/* Explanation Info */}
+          <div className="rounded-xl border border-border bg-secondary/30 p-3.5 text-xs text-muted-foreground space-y-1.5 leading-relaxed">
             <p className="flex items-center gap-1.5 font-medium text-foreground">
               <HelpCircle className="w-3.5 h-3.5 text-primary shrink-0" />
               <span>How would you like to take this test?</span>
             </p>
             <p>
-              • <strong>Attempt Test:</strong> Starts the exam immediately. When finished, your score and answers will be saved in your history and database without cluttering your Library.
+              • <strong className="text-foreground">Attempt Test:</strong> Starts the assessment immediately. Score and results are saved in your personal history without adding it to your Library.
             </p>
             <p>
-              • <strong>Save to Library:</strong> Saves a permanent copy to your personal collection for future practice.
+              • <strong className="text-foreground">Save to Library:</strong> Saves a permanent copy to your personal collection for future study and review.
             </p>
           </div>
         </div>
 
-        <DialogFooter className="flex-col sm:flex-row gap-2 pt-3 border-t border-border/80">
+        {/* Footer Actions */}
+        <div className="px-6 py-4 border-t border-border bg-background flex flex-col sm:flex-row gap-2 sm:justify-end items-center">
           <Button
             type="button"
-            variant="outline"
+            variant="ghost"
             size="sm"
             onClick={dismissPendingSharedQuiz}
-            className="h-8 text-xs order-3 sm:order-1"
+            className="text-muted-foreground hover:text-foreground text-sm w-full sm:w-auto order-3 sm:order-1"
           >
             Dismiss
           </Button>
@@ -106,9 +108,9 @@ export function SharedQuizPromptDialog() {
             variant="outline"
             size="sm"
             onClick={() => acceptPendingSharedQuiz(false, true)}
-            className="h-8 text-xs gap-1.5 border-border/80 hover:bg-muted order-2"
+            className="border border-border rounded-xl px-4 py-2 text-sm text-muted-foreground hover:bg-secondary hover:text-foreground gap-1.5 w-full sm:w-auto order-2"
           >
-            <BookmarkCheck className="w-3.5 h-3.5 text-primary" />
+            <BookmarkCheck className="w-4 h-4 text-primary" />
             <span>Save to Library</span>
           </Button>
 
@@ -116,12 +118,12 @@ export function SharedQuizPromptDialog() {
             type="button"
             size="sm"
             onClick={() => acceptPendingSharedQuiz(true, false)}
-            className="h-8 text-xs gap-1.5 bg-emerald-500 hover:bg-emerald-600 text-black font-semibold order-1 sm:order-3 shadow-sm"
+            className="bg-primary text-primary-foreground rounded-xl px-4 py-2 text-sm font-medium hover:bg-primary/90 gap-1.5 w-full sm:w-auto order-1 sm:order-3"
           >
             <Play className="w-3.5 h-3.5 fill-current" />
             <span>Attempt Test Now</span>
           </Button>
-        </DialogFooter>
+        </div>
       </DialogContent>
     </Dialog>
   );

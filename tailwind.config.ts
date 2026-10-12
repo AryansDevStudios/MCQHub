@@ -10,17 +10,8 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
-        mono: [
-          'JetBrains Mono',
-          'Geist Mono',
-          'ui-monospace',
-          'SFMono-Regular',
-          'Menlo',
-          'Monaco',
-          'Consolas',
-          'monospace',
-        ],
+        sans: ['Inter', 'system-ui', '-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'Roboto', 'sans-serif'],
+        mono: ['JetBrains Mono', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'Monaco', 'Consolas', 'monospace'],
       },
       colors: {
         background: 'hsl(var(--background))',
@@ -65,9 +56,25 @@ export default {
         },
       },
       borderRadius: {
-        lg: 'var(--radius)',
-        md: 'calc(var(--radius) - 2px)',
+        none: '0',
         sm: 'calc(var(--radius) - 4px)',
+        DEFAULT: '0.5rem',
+        md: 'calc(var(--radius) - 2px)',
+        lg: 'var(--radius)',
+        xl: '16px',
+        '2xl': '20px',
+        '3xl': '24px',
+        full: '9999px',
+      },
+      boxShadow: {
+        zen: '0 1px 3px rgba(0, 0, 0, 0.04)',
+        float: '0 10px 25px -5px rgba(0, 0, 0, 0.04), 0 8px 10px -6px rgba(0, 0, 0, 0.02)',
+        sm: '0 1px 2px rgba(0, 0, 0, 0.05)',
+        DEFAULT: '0 1px 3px rgba(0, 0, 0, 0.08)',
+        md: '0 4px 6px -1px rgba(0, 0, 0, 0.06)',
+        lg: '0 10px 25px -5px rgba(0, 0, 0, 0.08)',
+        xl: '0 20px 40px -10px rgba(0, 0, 0, 0.1)',
+        none: 'none',
       },
       keyframes: {
         'accordion-down': {

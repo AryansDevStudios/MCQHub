@@ -81,7 +81,7 @@ interface QuizContextType {
   nextQuestion: () => void;
   prevQuestion: () => void;
   finishQuiz: () => void;
-  retryQuiz: () => void;
+  retryQuiz: (quizOverride?: Quiz) => void;
 
   // Library & History
   savedQuizzes: Quiz[];
@@ -91,6 +91,7 @@ interface QuizContextType {
   clearHistory: () => void;
   deleteHistoryAttempt: (id: string) => void;
   viewAttemptResult: (attempt: QuizAttempt) => void;
+  viewingAttempt: QuizAttempt | null;
 
   // JSON Buffer for editor tab
   editorJsonBuffer: string;
@@ -171,7 +172,27 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
     return 'home';
   });
 
-  const [theme, setTheme] = useState<'light' | 'dark'>('dark');
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
+    if (typeof window !== 'undefined') {
+      const savedTheme = localStorage.getItem(STORAGE_KEYS.THEME) as 'light' | 'dark' | null;
+      if (savedTheme) return savedTheme;
+    }
+    return 'dark';
+  });
+
+  // Track attempt currently being viewed in ResultsView
+  const [viewingAttempt, setViewingAttempt] = useState<QuizAttempt | null>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const rawHistory = localStorage.getItem(STORAGE_KEYS.LOCAL_HISTORY);
+        if (rawHistory) {
+          const parsed = JSON.parse(rawHistory);
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed[0];
+        }
+      } catch {}
+    }
+    return null;
+  });
 
   // Auth & Firestore state with instant local hydration
   const [user, setUser] = useState<UserProfile | null>(() => {
@@ -286,7 +307,7 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
     return 0;
   });
 
-  const [isInstantMode, setIsInstantMode] = useState<boolean>(() => {
+  const [isInstantMode, setIsInstantModeState] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
       try {
         const raw = localStorage.getItem(STORAGE_KEYS.ACTIVE_EXAM);
@@ -447,6 +468,22 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
     []
   );
 
+  const setIsInstantMode = useCallback(
+    (val: boolean) => {
+      setIsInstantModeState(val);
+      if (activeExamSessionRef.current) {
+        const updated: ActiveExamSession = {
+          ...activeExamSessionRef.current,
+          isInstantMode: val,
+          updatedAt: new Date().toISOString(),
+        };
+        activeExamSessionRef.current = updated;
+        persistActiveExam(updated);
+      }
+    },
+    [persistActiveExam]
+  );
+
   /**
    * Smart Two-Way Reconciliation with Cloud Firestore
    */
@@ -488,7 +525,8 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
         const mergedQuizzesMap = new Map<string, Quiz>();
         for (const q of cloudQuizzes) {
           const id = q.id || q.title;
-          if (!deletedQuizIds.has(id) && !deletedQuizIds.has(q.title)) {
+          const isDeleted = (q.id && deletedQuizIds.has(q.id)) || (!q.id && deletedQuizIds.has(q.title));
+          if (!isDeleted) {
             mergedQuizzesMap.set(id, q);
           }
         }
@@ -496,7 +534,8 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
         let needsCloudQuizUpdate = false;
         for (const localQ of currentLocalQuizzes) {
           const id = localQ.id || localQ.title;
-          if (deletedQuizIds.has(id) || deletedQuizIds.has(localQ.title)) continue;
+          const isDeleted = (localQ.id && deletedQuizIds.has(localQ.id)) || (!localQ.id && deletedQuizIds.has(localQ.title));
+          if (isDeleted) continue;
           if (!mergedQuizzesMap.has(id)) {
             mergedQuizzesMap.set(id, localQ);
             needsCloudQuizUpdate = true;
@@ -612,6 +651,12 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
       if (typeof window !== 'undefined') {
         const targetView = getViewForPath(window.location.pathname);
         setViewState(targetView);
+        try {
+          localStorage.setItem('mcqhub_last_view', targetView);
+        } catch {}
+        if ((targetView === 'library' || targetView === 'history') && userRef.current) {
+          syncLibraryWithCloud(true);
+        }
       }
     };
 
@@ -651,7 +696,8 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
       setTheme(savedTheme);
       document.documentElement.classList.toggle('dark', savedTheme === 'dark');
     } else {
-      document.documentElement.classList.add('dark');
+      setTheme('light');
+      document.documentElement.classList.remove('dark');
     }
 
     // Local Storage Immediate Hydration
@@ -682,10 +728,9 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
         setActiveExamSession(parsed);
 
         const currentPath = typeof window !== 'undefined' ? window.location.pathname.replace(/\/$/, '') || '/' : '/';
-        const lastView = localStorage.getItem('mcqhub_last_view');
 
-        // If user refreshed on /quiz or was in an active quiz, restore quiz and timer immediately
-        if (currentPath === '/quiz' || lastView === 'quiz') {
+        // Only restore active quiz directly to quiz view if user navigated to or refreshed on /quiz
+        if (currentPath === '/quiz') {
           setActiveQuiz(parsed.quiz);
           setUserAnswers(parsed.userAnswers || {});
           setCurrentQuestionIndex(parsed.currentQuestionIndex || 0);
@@ -750,6 +795,11 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
                     createdAt: originalCreatedAt,
                   });
                   addToast(`Shared Assessment loaded: "${res.quiz.title}"`, 'info');
+                }
+
+                // Clean share parameters from URL to prevent page reload from re-fetching and wiping in-progress exam
+                if (typeof window !== 'undefined' && window.history && window.history.replaceState) {
+                  window.history.replaceState({}, document.title, window.location.pathname);
                 }
               } else {
                 addToast(res.error || 'Shared assessment link has expired', 'error');
@@ -1066,6 +1116,7 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
     setOriginDeviceId(devId);
     setElapsedMs(0);
     setElapsedSeconds(0);
+    setViewingAttempt(null);
     activeExamSessionRef.current = session;
     persistActiveExam(session);
   };
@@ -1084,6 +1135,10 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
     setQuestionNotes(activeExamSession.questionNotes || {});
 
     const base = activeExamSession.elapsedMs || (activeExamSession.elapsedSeconds ? activeExamSession.elapsedSeconds * 1000 : 0);
+    setElapsedMs(base);
+    setElapsedSeconds(Math.floor(base / 1000));
+    setViewingAttempt(null);
+
     const updatedSession: ActiveExamSession = {
       ...activeExamSession,
       startedAtMs: nowEpoch,
@@ -1330,6 +1385,7 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
     const newHistory = [attempt, ...history];
     setHistory(newHistory);
     localStorage.setItem(STORAGE_KEYS.LOCAL_HISTORY, JSON.stringify(newHistory));
+    setViewingAttempt(attempt);
 
     // Clear active in-progress exam from cloud and device!
     persistActiveExam(null);
@@ -1352,27 +1408,13 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
     addToast(`Exam completed! Score: ${score}/${attempt.total}`, 'success');
   };
 
-  const retryQuiz = () => {
-    if (!activeQuiz) return;
-    setUserAnswers({});
-    setCheckedQuestions({});
-    setQuestionNotes({});
-    setCurrentQuestionIndex(0);
-    setElapsedSeconds(0);
-    setIsTimerRunning(true);
-    setView('quiz');
-
-    const session: ActiveExamSession = {
-      quiz: activeQuiz,
-      userAnswers: {},
-      currentQuestionIndex: 0,
-      elapsedSeconds: 0,
-      isInstantMode,
-      checkedQuestions: {},
-      questionNotes: {},
-      updatedAt: new Date().toISOString(),
-    };
-    persistActiveExam(session);
+  const retryQuiz = (quizOverride?: Quiz) => {
+    const targetQuiz = quizOverride || activeQuiz || viewingAttempt?.quizData || history[0]?.quizData;
+    if (!targetQuiz) {
+      addToast('No quiz available to retake', 'info');
+      return;
+    }
+    startQuiz(targetQuiz, isInstantMode);
   };
 
   // Immediate Local Persistence with Background Cloud Sync
@@ -1414,11 +1456,18 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
 
   const deleteQuizFromLibrary = (indexOrTitle: string | number) => {
     let deletedItem: Quiz | undefined;
+    const hasIdMatch = typeof indexOrTitle === 'string' && savedQuizzes.some((q) => q.id === indexOrTitle);
+
     const updated = savedQuizzes.filter((q, i) => {
-      const isMatch = typeof indexOrTitle === 'number'
-        ? i === indexOrTitle
-        : q.id === indexOrTitle || q.title === indexOrTitle;
-      if (isMatch) deletedItem = q;
+      let isMatch = false;
+      if (typeof indexOrTitle === 'number') {
+        isMatch = i === indexOrTitle;
+      } else if (hasIdMatch) {
+        isMatch = q.id === indexOrTitle;
+      } else {
+        isMatch = q.id === indexOrTitle || q.title === indexOrTitle;
+      }
+      if (isMatch && !deletedItem) deletedItem = q;
       return !isMatch;
     });
 
@@ -1430,8 +1479,11 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
       try {
         const rawDeleted = localStorage.getItem(STORAGE_KEYS.DELETED_QUIZZES);
         const deletedSet: Set<string> = new Set(rawDeleted ? JSON.parse(rawDeleted) : []);
-        if (deletedItem.id) deletedSet.add(deletedItem.id);
-        deletedSet.add(deletedItem.title);
+        if (deletedItem.id) {
+          deletedSet.add(deletedItem.id);
+        } else {
+          deletedSet.add(deletedItem.title);
+        }
         localStorage.setItem(STORAGE_KEYS.DELETED_QUIZZES, JSON.stringify(Array.from(deletedSet)));
       } catch {}
     }
@@ -1469,6 +1521,7 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
     setActiveQuiz(attempt.quizData);
     setUserAnswers(attempt.userAnswers);
     setQuestionNotes(attempt.questionNotes || {});
+    setViewingAttempt(attempt);
     setElapsedSeconds(0);
     setIsTimerRunning(false);
     setView('results');
@@ -1553,10 +1606,20 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
   const openSharedQuizById = async (shareIdOrUrl: string): Promise<boolean> => {
     let cleanId = shareIdOrUrl.trim();
     if (cleanId.includes('?share=')) {
-      cleanId = cleanId.split('?share=')[1].split('&')[0];
+      cleanId = cleanId.split('?share=')[1].split('&')[0].split('#')[0];
+    } else if (cleanId.includes('?code=')) {
+      cleanId = cleanId.split('?code=')[1].split('&')[0].split('#')[0];
     } else if (cleanId.includes('?test=')) {
-      cleanId = cleanId.split('?test=')[1].split('&')[0];
+      cleanId = cleanId.split('?test=')[1].split('&')[0].split('#')[0];
+    } else if (cleanId.includes('?quiz=')) {
+      cleanId = cleanId.split('?quiz=')[1].split('&')[0].split('#')[0];
+    } else {
+      const pinMatch = cleanId.match(/\b\d{5}\b/);
+      if (pinMatch) {
+        cleanId = pinMatch[0];
+      }
     }
+    cleanId = cleanId.replace(/[^a-zA-Z0-9_-]/g, '');
 
     if (!cleanId) {
       addToast('Please enter a valid 5-digit Share Code or Link', 'error');
@@ -1688,6 +1751,7 @@ export function QuizProvider({ children }: { children: React.ReactNode }) {
         clearHistory,
         deleteHistoryAttempt,
         viewAttemptResult,
+        viewingAttempt,
         editorJsonBuffer,
         setEditorJsonBuffer,
         toasts,
